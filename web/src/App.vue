@@ -49,7 +49,7 @@
     <main>
       <div v-if="error" class="err">{{ error }}</div>
       <DocumentsView v-if="view === 'docs'" :documents="documents" :stats="stats" :detail="detail" @open="openDoc"/>
-      <MapView v-if="view === 'map'" :places="places" @place="onPlace"/>
+      <MapView v-if="view === 'map'" :places="places" :selected="filters.place" @place="onPlace"/>
       <TimelineView v-if="view === 'time'" :timeline="timeline" @year="onYear" @range="onYearRange"/>
       <ConceptsView v-if="view === 'concepts'" :concept-list="conceptList" @concept="onConcept" @reload="reload"/>
       <MeasuresView v-if="view === 'measures'" :measures="measures" :filters="filters" @unit="onUnit"/>
@@ -133,7 +133,6 @@ async function openDoc(id) {
 
 function onPlace(name) {
   filters.place = name
-  view.value = 'docs'
   reload()
 }
 function onYear(year) {
