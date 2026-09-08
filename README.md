@@ -23,6 +23,11 @@ bin/meridian serve
 
 Open http://127.0.0.1:8090/
 
+The Documents view reports MIME, extraction yield (text/file, metadata/file),
+type–token ratio, Tika metadata, and extracted text. Map is a D3 bubble map.
+Timeline is a year×month heatmap. Measurements are pies, histograms, and a
+search over unit/surface/value.
+
 ```bash
 bin/meridian index ./papers ./notes
 bin/meridian index ./demo --no-geo   # skip Nominatim if you are offline
