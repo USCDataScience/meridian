@@ -3,12 +3,37 @@ Meridian
 
 Point it at a corpus. Cut it on **concept, place, and time**.
 
-Formerly Polar Deep Insights — Tika extraction plus a visualizer over NER, geo, and quantities. The polar TREC dataset was the first corpus, not the product.
+Tika extracts text. spaCy finds names and dates. quantulum3 finds quantities.
+Places are geocoded once and cached. Concepts live in `concepts.yaml`.
+Everything lands in SQLite. A Vue 3 UI filters the three axes together.
 
-A rewrite is in planning: Vue 3 UI, a local `meridian index` / `meridian serve` CLI, no Docker, no Elasticsearch, no GeoTopic/GROBID sidecars.
+No Docker. No Elasticsearch. No GeoTopic or GROBID sidecars.
 
-# Affiliation
+Needs **Java 11+** (Tika), **Python 3.10+**, and **Node 18+** to build the UI.
 
-[Information Retrieval and Data Science](https://irds.usc.edu) Group, University of Southern California.
+```bash
+python3.12 -m venv .venv
+.venv/bin/pip install -e .
+.venv/bin/python -m spacy download en_core_web_sm
+cd web && npm install && npm run build && cd ..
+
+bin/meridian index ./demo
+bin/meridian serve
+```
+
+Open http://127.0.0.1:8090/
+
+```bash
+bin/meridian index ./papers ./notes
+bin/meridian index ./demo --no-geo   # skip Nominatim if you are offline
+bin/meridian reset --yes
+```
+
+`bin/meridian` uses `.venv` when it exists. The concept editor in the UI
+appends to `concepts.yaml` and rematches the catalog.
+
+Formerly Polar Deep Insights. Polar TREC was the first corpus, not the product.
 
 Work of [Chris Mattmann](https://github.com/chrismattmann) and [Mattmann.AI](https://mattmann.ai).
+[IRDS](https://irds.usc.edu), University of Southern California.
+Apache License 2.0.

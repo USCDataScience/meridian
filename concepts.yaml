@@ -1,0 +1,34 @@
+# Concept library. Aliases are matched case-insensitively in document text.
+# The Vue editor writes this file.
+
+- id: sea-ice
+  label: Sea ice
+  aliases: [sea ice, pack ice, ice extent, ice shelf, sea-ice]
+
+- id: glacier
+  label: Glacier
+  aliases: [glacier, ice sheet, ice cap, glacial]
+
+- id: temperature
+  label: Temperature
+  aliases: [temperature, warming, warming trend, celsius, kelvin]
+
+- id: sea-level
+  label: Sea level
+  aliases: [sea level, sea-level rise, steric]
+
+- id: oil-spill
+  label: Oil spill
+  aliases: [oil spill, crude oil, oil leak]
+
+- id: pollution
+  label: Pollution
+  aliases: [pollution, contaminant, aerosol, black carbon]
+
+- id: climate
+  label: Climate
+  aliases: [climate, climatic, climatology, climate change]
+
+- id: mesoscale
+  label: Mesoscale
+  aliases: [mesoscale, meso-scale]
