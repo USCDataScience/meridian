@@ -34,6 +34,7 @@
       </select>
       <button class="go" @click="reload">Apply</button>
       <button @click="clearFilters">Clear</button>
+      <span v-if="activeFilter" class="chip">{{ activeFilter }}</span>
     </section>
 
     <section class="stats" v-if="stats">
@@ -49,7 +50,7 @@
       <div v-if="error" class="err">{{ error }}</div>
       <DocumentsView v-if="view === 'docs'" :documents="documents" :stats="stats" :detail="detail" @open="openDoc"/>
       <MapView v-if="view === 'map'" :places="places" @place="onPlace"/>
-      <TimelineView v-if="view === 'time'" :timeline="timeline" @year="onYear"/>
+      <TimelineView v-if="view === 'time'" :timeline="timeline" @year="onYear" @range="onYearRange"/>
       <ConceptsView v-if="view === 'concepts'" :concept-list="conceptList" @concept="onConcept" @reload="reload"/>
       <MeasuresView v-if="view === 'measures'" :measures="measures" :filters="filters" @unit="onUnit"/>
     </main>
@@ -85,7 +86,23 @@ const measures = ref([])
 const unitOptions = ref([])
 const detail = ref(null)
 const error = ref('')
-const placeNames = computed(() => places.value.map(p => p.name))
+const placeOptions = ref([])
+const placeNames = computed(() => {
+  const names = placeOptions.value.map(p => p.name)
+  if (filters.place && !names.includes(filters.place)) names.unshift(filters.place)
+  return names
+})
+const activeFilter = computed(() => {
+  const bits = []
+  if (filters.place) bits.push('place: ' + filters.place)
+  if (filters.concept) bits.push('concept: ' + filters.concept)
+  if (filters.year_min !== '' || filters.year_max !== '') {
+    bits.push('years: ' + (filters.year_min || '…') + '–' + (filters.year_max || '…'))
+  }
+  if (filters.unit) bits.push('unit: ' + filters.unit)
+  if (filters.q) bits.push('text: ' + filters.q)
+  return bits.join(' · ')
+})
 
 async function reload() {
   error.value = ''
@@ -94,6 +111,7 @@ async function reload() {
     stats.value = await get('/api/stats', f)
     documents.value = await get('/api/documents', f)
     places.value = await get('/api/places', f)
+    placeOptions.value = await get('/api/places', { ...f, place: '' })
     timeline.value = await get('/api/timeline', f)
     conceptList.value = await get('/api/concepts', f)
     unitOptions.value = await get('/api/measurements', { ...f, unit: '' })
@@ -115,10 +133,17 @@ async function openDoc(id) {
 
 function onPlace(name) {
   filters.place = name
+  view.value = 'docs'
   reload()
 }
 function onYear(year) {
-  filters.year_min = filters.year_max = year
+  filters.year_min = year
+  filters.year_max = year
+  reload()
+}
+function onYearRange({ min, max }) {
+  filters.year_min = min
+  filters.year_max = max
   reload()
 }
 function onConcept(id) {
@@ -154,6 +179,10 @@ nav button.active { color: var(--sea); border-bottom: 2px solid var(--gold); }
 }
 .filters input, .filters select { padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 .go { background: var(--sea); color: #fff; border: none; padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer; }
+.chip {
+  align-self: center; font-size: 0.8rem; color: var(--sea);
+  background: #e8eef0; padding: 0.2rem 0.55rem; border-radius: 99px;
+}
 .stats {
   display: flex; flex-wrap: wrap; gap: 1.4rem; padding: 0.6rem 1.4rem; font-size: 0.9rem; color: var(--muted);
 }

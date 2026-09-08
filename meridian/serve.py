@@ -37,7 +37,7 @@ def _filtered_ids(db, q=None, concept=None, place=None, year_min=None, year_max=
         args.append(concept)
     if place:
         joins.append("JOIN places p ON p.document_id = d.id")
-        where.append("p.name = ?")
+        where.append("LOWER(TRIM(p.name)) = LOWER(TRIM(?))")
         args.append(place)
     if year_min is not None or year_max is not None:
         joins.append("JOIN times t ON t.document_id = d.id")

@@ -49,9 +49,10 @@ def index_paths(paths, resolve_geo=True):
     conn = store.connect()
     lib = conceptlib.load()
     n = 0
-    for f in files:
+    total = len(files)
+    for i, f in enumerate(files, 1):
         rel = str(f)
-        print(f"index {rel}")
+        print(f"index [{i}/{total}] {rel}")
         try:
             text, mime, meta = extract.tika_parse(f)
         except Exception as e:

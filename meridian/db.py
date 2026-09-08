@@ -114,11 +114,11 @@ def connect(path=None):
 
 
 def reset(path=None):
-    ensure_data()
-    p = path or DB_PATH
-    if p.exists():
-        p.unlink()
-    return connect(p)
+    """Empty the catalog but keep the Nominatim cache."""
+    db = connect(path)
+    db.execute("DELETE FROM documents")
+    db.commit()
+    return db
 
 
 def insert_document(db, path, filename, mime, text, year, stats=None):
