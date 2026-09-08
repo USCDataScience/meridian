@@ -14,60 +14,72 @@
         <table class="nums">
           <thead><tr><th></th><th>Max</th><th>Average</th><th>Sum</th></tr></thead>
           <tbody>
-            <tr><th>Documents</th><td colspan="3">{{ stats.documents }}</td></tr>
             <tr>
-              <th>File size</th>
+              <th><span class="explain" data-tip="Files in the current filter set.">Documents</span></th>
+              <td colspan="3">{{ stats.documents }}</td>
+            </tr>
+            <tr>
+              <th><span class="explain" data-tip="Bytes on disk before extraction.">File size</span></th>
               <td>{{ bytes(stats.file_size?.max) }}</td>
               <td>{{ bytes(stats.file_size?.avg) }}</td>
               <td>{{ bytes(stats.file_size?.sum) }}</td>
             </tr>
             <tr>
-              <th>Extracted text</th>
+              <th><span class="explain" data-tip="UTF-8 bytes of Tika-extracted text.">Extracted text</span></th>
               <td>{{ bytes(stats.text_size?.max) }}</td>
               <td>{{ bytes(stats.text_size?.avg) }}</td>
               <td>{{ bytes(stats.text_size?.sum) }}</td>
             </tr>
             <tr>
-              <th>Metadata size</th>
+              <th><span class="explain" data-tip="Serialized Tika metadata size (keys/values kept after indexing).">Metadata size</span></th>
               <td>{{ bytes(stats.meta_size?.max) }}</td>
               <td>{{ bytes(stats.meta_size?.avg) }}</td>
               <td>{{ bytes(stats.meta_size?.sum) }}</td>
             </tr>
             <tr>
-              <th>Text yield (text / file)</th>
+              <th><span class="explain" data-tip="extracted text bytes / file bytes. PDFs are mostly binary, so this is often a few percent.">Text yield</span></th>
               <td colspan="3">{{ pct(stats.text_yield_avg) }}</td>
             </tr>
             <tr>
-              <th>Metadata yield (meta / file)</th>
+              <th><span class="explain" data-tip="metadata bytes / file bytes.">Metadata yield</span></th>
               <td colspan="3">{{ pct(stats.meta_yield_avg) }}</td>
             </tr>
             <tr>
-              <th>Type–token ratio</th>
+              <th><span class="explain" data-tip="Unique terms ÷ tokens in the extracted text. Higher means more varied vocabulary; lower means more repetition.">Type–token ratio</span></th>
               <td colspan="3">{{ stats.ttr_avg != null ? stats.ttr_avg.toFixed(3) : '—' }}</td>
             </tr>
             <tr>
-              <th>Tokens</th>
+              <th><span class="explain" data-tip="TTR is type–token ratio: unique terms / tokens. Same number as the row above; shown here under the usual acronym.">TTR</span></th>
+              <td colspan="3">{{ stats.ttr_avg != null ? stats.ttr_avg.toFixed(3) : '—' }}</td>
+            </tr>
+            <tr>
+              <th><span class="explain" data-tip="Word-like tokens ([A-Za-z][A-Za-z0-9']+) in extracted text.">Tokens</span></th>
               <td>{{ fmt(stats.word_count?.max) }}</td>
               <td>{{ fmt(stats.word_count?.avg) }}</td>
               <td>{{ fmt(stats.word_count?.sum) }}</td>
             </tr>
             <tr>
-              <th>Unique terms</th>
+              <th><span class="explain" data-tip="Distinct tokens, case-folded. The numerator of TTR.">Unique terms</span></th>
               <td>{{ fmt(stats.unique_terms?.max) }}</td>
               <td>{{ fmt(stats.unique_terms?.avg) }}</td>
               <td>{{ fmt(stats.unique_terms?.sum) }}</td>
             </tr>
           </tbody>
         </table>
-        <p class="hint">Same yield table as Polar Deep Insights Stats — text and metadata over file size, plus TTR from the content-detection lecture.</p>
       </div>
     </div>
 
     <table class="docs">
       <thead>
         <tr>
-          <th>File</th><th>MIME</th><th>Size</th><th>Text %</th><th>Meta %</th>
-          <th>TTR</th><th>Lang</th><th>Year</th>
+          <th>File</th>
+          <th><span class="explain" data-tip="Tika Content-Type. Empty means Tika returned no type (parse failed).">MIME</span></th>
+          <th><span class="explain" data-tip="Bytes on disk.">Size</span></th>
+          <th><span class="explain" data-tip="Extracted text bytes / file bytes.">Text %</span></th>
+          <th><span class="explain" data-tip="Metadata bytes / file bytes.">Meta %</span></th>
+          <th><span class="explain" data-tip="TTR = type–token ratio = unique terms / tokens.">TTR</span></th>
+          <th><span class="explain" data-tip="Language from Tika metadata, or English if the text looks like English.">Lang</span></th>
+          <th><span class="explain" data-tip="Most common extracted year in the document, not necessarily publication year.">Year</span></th>
         </tr>
       </thead>
       <tbody>
@@ -89,11 +101,11 @@
       <h2>{{ detail.filename }}</h2>
       <p class="muted">{{ detail.path }}</p>
       <div class="kpis">
-        <span><strong>{{ pct(detail.text_yield) }}</strong> text yield</span>
-        <span><strong>{{ pct(detail.meta_yield) }}</strong> metadata yield</span>
-        <span><strong>{{ fmt(detail.word_count) }}</strong> tokens</span>
-        <span><strong>{{ fmt(detail.unique_terms) }}</strong> unique</span>
-        <span><strong>{{ detail.ttr != null ? detail.ttr.toFixed(3) : '—' }}</strong> TTR</span>
+        <span class="explain" data-tip="Extracted text bytes / file bytes."><strong>{{ pct(detail.text_yield) }}</strong> text yield</span>
+        <span class="explain" data-tip="Metadata bytes / file bytes."><strong>{{ pct(detail.meta_yield) }}</strong> metadata yield</span>
+        <span class="explain" data-tip="Word-like tokens in extracted text."><strong>{{ fmt(detail.word_count) }}</strong> tokens</span>
+        <span class="explain" data-tip="Distinct tokens. Numerator of TTR."><strong>{{ fmt(detail.unique_terms) }}</strong> unique</span>
+        <span class="explain" data-tip="Type–token ratio: unique / tokens."><strong>{{ detail.ttr != null ? detail.ttr.toFixed(3) : '—' }}</strong> TTR</span>
       </div>
       <div class="tabs">
         <button v-for="t in tabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button>
@@ -164,7 +176,10 @@ function pct(n) {
 
 function draw() {
   paint(() => {
-    pieChart(mimeEl.value, (props.stats.mime || []).map(d => ({ label: d.mime, count: d.count })))
+    pieChart(mimeEl.value, (props.stats.mime || []).map(d => ({
+      label: d.mime || '(unparsed)',
+      count: d.count
+    })))
     pieChart(langEl.value, (props.stats.languages || []).map(d => ({ label: d.language, count: d.count })))
     if (props.detail) {
       barChart(placeEl.value, (props.detail.places || []).slice(0, 12).map(p => ({ label: p.name, count: p.count })))
@@ -193,7 +208,26 @@ watch(() => [props.stats, props.detail, tab.value], draw, { deep: true })
 .click { cursor: pointer; }
 .click:hover { background: #efe8d8; }
 .muted { color: var(--muted); }
-.hint { color: var(--muted); font-size: 0.85rem; }
+.explain { border-bottom: 1px dotted var(--muted); cursor: help; }
+.explain:hover::after, .explain:focus::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 40;
+  max-width: 18rem;
+  margin-top: 1.4rem;
+  background: #12202a;
+  color: #fffdf8;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(18,32,42,.28);
+  border: 1px solid #c9a227;
+}
+.nums th, .docs th, .kpis span { position: relative; }
 .detail { margin-top: 1.2rem; background: var(--card); border: 1px solid var(--line); padding: 1rem; border-radius: 8px; }
 .detail pre { white-space: pre-wrap; font-size: 0.85rem; max-height: 28rem; overflow: auto; }
 .kpis { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0.6rem 0; color: var(--muted); }

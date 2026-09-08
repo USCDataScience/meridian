@@ -154,12 +154,12 @@ export function histogram(el, bins, { onClick } = {}) {
     .selectAll('text').attr('font-size', 10)
 }
 
-export function heatmap(el, cells, { onClick, monthZeroLabel = 'yr' } = {}) {
+export function heatmap(el, cells, { onClick, monthZeroLabel = 'yr', newestFirst = true } = {}) {
   if (!el) return
   clear(el)
   const data = cells || []
   if (!data.length) return
-  const years = [...new Set(data.map(d => d.year))].sort((a, b) => a - b)
+  const years = [...new Set(data.map(d => d.year))].sort((a, b) => newestFirst ? b - a : a - b)
   const hasZero = data.some(d => d.month === 0)
   const months = hasZero ? d3.range(0, 13) : d3.range(1, 13)
   const { w } = size(el)
@@ -248,7 +248,7 @@ export function decadeHeatmap(el, years, { onClick } = {}) {
   const rows = years || []
   if (!rows.length) return
   const byYear = new Map(rows.map(d => [d.year, d]))
-  const decades = [...new Set(rows.map(d => Math.floor(d.year / 10) * 10))].sort((a, b) => a - b)
+  const decades = [...new Set(rows.map(d => Math.floor(d.year / 10) * 10))].sort((a, b) => b - a)
   const { w } = size(el)
   const m = { t: 18, r: 12, b: 8, l: 44 }
   const cell = Math.max(12, Math.min(22, (w - m.l - m.r) / 10 - 2))
