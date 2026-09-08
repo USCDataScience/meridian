@@ -1,3 +1,4 @@
+import json
 import sqlite3
 from .paths import DB_PATH, ensure_data
 
@@ -9,6 +10,14 @@ CREATE TABLE IF NOT EXISTS documents (
   mime TEXT,
   text TEXT,
   year INTEGER,
+  file_size INTEGER,
+  text_size INTEGER,
+  meta_size INTEGER,
+  language TEXT,
+  word_count INTEGER,
+  unique_terms INTEGER,
+  ttr REAL,
+  metadata TEXT,
   indexed_at TEXT DEFAULT (datetime('now'))
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS documents_fts USING fts5(
@@ -35,6 +44,7 @@ CREATE TABLE IF NOT EXISTS times (
   id INTEGER PRIMARY KEY,
   document_id INTEGER NOT NULL,
   year INTEGER NOT NULL,
+  month INTEGER,
   surface TEXT,
   FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
@@ -47,6 +57,7 @@ CREATE TABLE IF NOT EXISTS quantities (
   surface TEXT,
   FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
+CREATE INDEX IF NOT EXISTS idx_quantities_unit ON quantities(unit);
 CREATE TABLE IF NOT EXISTS concept_hits (
   id INTEGER PRIMARY KEY,
   document_id INTEGER NOT NULL,
@@ -70,6 +81,27 @@ END;
 """
 
 
+def _migrate(db):
+    cols = {r[1] for r in db.execute("PRAGMA table_info(documents)")}
+    for col, spec in (
+        ("file_size", "INTEGER"),
+        ("text_size", "INTEGER"),
+        ("meta_size", "INTEGER"),
+        ("language", "TEXT"),
+        ("word_count", "INTEGER"),
+        ("unique_terms", "INTEGER"),
+        ("ttr", "REAL"),
+        ("metadata", "TEXT"),
+    ):
+        if col not in cols:
+            db.execute(f"ALTER TABLE documents ADD COLUMN {col} {spec}")
+    tcols = {r[1] for r in db.execute("PRAGMA table_info(times)")}
+    if "month" not in tcols:
+        db.execute("ALTER TABLE times ADD COLUMN month INTEGER")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_times_month ON times(year, month)")
+    db.commit()
+
+
 def connect(path=None):
     ensure_data()
     db = sqlite3.connect(path or DB_PATH)
@@ -77,6 +109,7 @@ def connect(path=None):
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
     db.executescript(TRIGGERS)
+    _migrate(db)
     return db
 
 
@@ -88,10 +121,21 @@ def reset(path=None):
     return connect(p)
 
 
-def insert_document(db, path, filename, mime, text, year):
+def insert_document(db, path, filename, mime, text, year, stats=None):
+    stats = stats or {}
+    meta = stats.get("metadata") or {}
     cur = db.execute(
-        "INSERT INTO documents(path, filename, mime, text, year) VALUES (?,?,?,?,?)",
-        (path, filename, mime, text, year),
+        """INSERT INTO documents(
+             path, filename, mime, text, year,
+             file_size, text_size, meta_size, language,
+             word_count, unique_terms, ttr, metadata
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+        (
+            path, filename, mime, text, year,
+            stats.get("file_size"), stats.get("text_size"), stats.get("meta_size"),
+            stats.get("language"), stats.get("word_count"), stats.get("unique_terms"),
+            stats.get("ttr"), json.dumps(meta, ensure_ascii=False),
+        ),
     )
     return cur.lastrowid
 

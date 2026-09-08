@@ -28,6 +28,10 @@
       </select>
       <input v-model="filters.year_min" type="number" placeholder="From year" @change="reload"/>
       <input v-model="filters.year_max" type="number" placeholder="To year" @change="reload"/>
+      <select v-model="filters.unit" @change="reload">
+        <option value="">All units</option>
+        <option v-for="m in unitOptions" :key="m.unit" :value="m.unit">{{ m.unit }}</option>
+      </select>
       <button class="go" @click="reload">Apply</button>
       <button @click="clearFilters">Clear</button>
     </section>
@@ -38,91 +42,28 @@
       <div><strong>{{ stats.years }}</strong> years</div>
       <div><strong>{{ stats.concepts }}</strong> concepts hit</div>
       <div><strong>{{ stats.quantities }}</strong> quantities</div>
+      <div v-if="stats.text_yield_avg != null"><strong>{{ (stats.text_yield_avg * 100).toFixed(1) }}%</strong> text yield</div>
     </section>
 
     <main>
       <div v-if="error" class="err">{{ error }}</div>
-
-      <section v-if="view === 'docs'">
-        <table>
-          <thead><tr><th>File</th><th>Type</th><th>Year</th></tr></thead>
-          <tbody>
-            <tr v-for="d in documents" :key="d.id" @click="openDoc(d.id)" class="click">
-              <td>{{ d.filename }}</td>
-              <td class="muted">{{ d.mime }}</td>
-              <td>{{ d.year || '—' }}</td>
-            </tr>
-          </tbody>
-        </table>
-        <p v-if="!documents.length" class="muted">No documents. Run <code>meridian index ./demo</code>.</p>
-        <article v-if="detail" class="detail">
-          <h2>{{ detail.filename }}</h2>
-          <p class="muted">{{ detail.path }}</p>
-          <p><strong>Places:</strong> {{ detail.places.map(p => p.name).join(', ') || '—' }}</p>
-          <p><strong>Years:</strong> {{ detail.years.join(', ') || '—' }}</p>
-          <p><strong>Concepts:</strong> {{ detail.concepts.map(c => c.label).join(', ') || '—' }}</p>
-          <pre>{{ detail.text }}</pre>
-        </article>
-      </section>
-
-      <section v-if="view === 'map'">
-        <p class="muted">Places with coordinates. Unresolved names stay in the list.</p>
-        <div class="bubbles">
-          <div v-for="p in located" :key="p.name" class="bubble" :title="p.name + ' ' + p.count"
-               :style="bubbleStyle(p)">
-            {{ p.name }} <em>{{ p.count }}</em>
-          </div>
-        </div>
-        <ul class="plain">
-          <li v-for="p in places" :key="p.name">
-            <button class="link" @click="filters.place = p.name; reload()">{{ p.name }}</button>
-            <span class="muted">{{ p.count }} · {{ p.lat != null ? p.lat.toFixed(2)+','+p.lon.toFixed(2) : 'unresolved' }}</span>
-          </li>
-        </ul>
-      </section>
-
-      <section v-if="view === 'time'">
-        <div class="bars">
-          <div v-for="t in timeline" :key="t.year" class="bar-row click" @click="filters.year_min = filters.year_max = t.year; reload()">
-            <span>{{ t.year }}</span>
-            <div class="bar"><i :style="{ width: (100 * t.count / maxTime) + '%' }"></i></div>
-            <span>{{ t.count }}</span>
-          </div>
-        </div>
-      </section>
-
-      <section v-if="view === 'concepts'">
-        <ul class="plain">
-          <li v-for="c in conceptList" :key="c.id">
-            <button class="link" @click="filters.concept = c.id; reload()">{{ c.label }}</button>
-            <span class="muted">{{ c.hits }} hits · {{ c.aliases.join(', ') }}</span>
-          </li>
-        </ul>
-        <form class="editor" @submit.prevent="addConcept">
-          <h3>Add a concept</h3>
-          <input v-model="newConcept.id" placeholder="id (sea-ice)" required/>
-          <input v-model="newConcept.label" placeholder="Label" required/>
-          <input v-model="newConcept.aliases" placeholder="aliases, comma separated"/>
-          <button class="go" type="submit">Save and rematch</button>
-        </form>
-      </section>
-
-      <section v-if="view === 'measures'">
-        <div class="bars">
-          <div v-for="m in measures" :key="m.unit" class="bar-row">
-            <span>{{ m.unit }}</span>
-            <div class="bar"><i :style="{ width: (100 * m.count / maxMeas) + '%' }"></i></div>
-            <span>{{ m.count }}</span>
-          </div>
-        </div>
-      </section>
+      <DocumentsView v-if="view === 'docs'" :documents="documents" :stats="stats" :detail="detail" @open="openDoc"/>
+      <MapView v-if="view === 'map'" :places="places" @place="onPlace"/>
+      <TimelineView v-if="view === 'time'" :timeline="timeline" @year="onYear"/>
+      <ConceptsView v-if="view === 'concepts'" :concept-list="conceptList" @concept="onConcept" @reload="reload"/>
+      <MeasuresView v-if="view === 'measures'" :measures="measures" :filters="filters" @unit="onUnit"/>
     </main>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
-import { get, post } from './api.js'
+import { get } from './api.js'
+import DocumentsView from './views/DocumentsView.vue'
+import MapView from './views/MapView.vue'
+import TimelineView from './views/TimelineView.vue'
+import ConceptsView from './views/ConceptsView.vue'
+import MeasuresView from './views/MeasuresView.vue'
 
 const views = [
   { id: 'docs', label: 'Documents' },
@@ -132,48 +73,28 @@ const views = [
   { id: 'measures', label: 'Measurements' }
 ]
 const view = ref('docs')
-const filters = reactive({ q: '', concept: '', place: '', year_min: '', year_max: '' })
-const stats = ref(null)
+const filters = reactive({ q: '', concept: '', place: '', year_min: '', year_max: '', unit: '' })
+const stats = ref({})
 const documents = ref([])
 const places = ref([])
-const timeline = ref([])
+const timeline = ref({ years: [], heatmap: [], decades: [] })
 const conceptList = ref([])
 const measures = ref([])
+const unitOptions = ref([])
 const detail = ref(null)
 const error = ref('')
-const newConcept = reactive({ id: '', label: '', aliases: '' })
-
 const placeNames = computed(() => places.value.map(p => p.name))
-const located = computed(() => places.value.filter(p => p.lat != null && p.lon != null))
-const maxTime = computed(() => Math.max(1, ...timeline.value.map(t => t.count)))
-const maxMeas = computed(() => Math.max(1, ...measures.value.map(m => m.count)))
-
-function bubbleStyle(p) {
-  const xs = located.value.map(x => x.lon)
-  const ys = located.value.map(x => x.lat)
-  const minx = Math.min(...xs), maxx = Math.max(...xs)
-  const miny = Math.min(...ys), maxy = Math.max(...ys)
-  const dx = (maxx - minx) || 1
-  const dy = (maxy - miny) || 1
-  const left = ((p.lon - minx) / dx) * 90 + 2
-  const top = (1 - (p.lat - miny) / dy) * 70 + 4
-  const size = 1.6 + Math.log2(1 + p.count)
-  return {
-    left: left + '%',
-    top: top + '%',
-    fontSize: size + 'rem'
-  }
-}
 
 async function reload() {
   error.value = ''
   try {
     const f = { ...filters }
-    stats.value = await get('/api/stats')
+    stats.value = await get('/api/stats', f)
     documents.value = await get('/api/documents', f)
     places.value = await get('/api/places', f)
     timeline.value = await get('/api/timeline', f)
     conceptList.value = await get('/api/concepts', f)
+    unitOptions.value = await get('/api/measurements', { ...f, unit: '' })
     measures.value = await get('/api/measurements', f)
   } catch (e) {
     error.value = e.message || String(e)
@@ -181,7 +102,7 @@ async function reload() {
 }
 
 function clearFilters() {
-  filters.q = filters.concept = filters.place = filters.year_min = filters.year_max = ''
+  filters.q = filters.concept = filters.place = filters.year_min = filters.year_max = filters.unit = ''
   detail.value = null
   reload()
 }
@@ -190,11 +111,21 @@ async function openDoc(id) {
   detail.value = await get('/api/documents/' + id)
 }
 
-async function addConcept() {
-  const aliases = newConcept.aliases.split(',').map(s => s.trim()).filter(Boolean)
-  await post('/api/concepts', { id: newConcept.id, label: newConcept.label, aliases })
-  newConcept.id = newConcept.label = newConcept.aliases = ''
-  await reload()
+function onPlace(name) {
+  filters.place = name
+  reload()
+}
+function onYear(year) {
+  filters.year_min = filters.year_max = year
+  reload()
+}
+function onConcept(id) {
+  filters.concept = id
+  reload()
+}
+function onUnit(unit) {
+  filters.unit = unit
+  reload()
 }
 
 onMounted(reload)
@@ -222,32 +153,9 @@ nav button.active { color: var(--sea); border-bottom: 2px solid var(--gold); }
 .filters input, .filters select { padding: 0.35rem 0.5rem; border: 1px solid var(--line); border-radius: 4px; background: #fff; }
 .go { background: var(--sea); color: #fff; border: none; padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer; }
 .stats {
-  display: flex; gap: 1.4rem; padding: 0.6rem 1.4rem; font-size: 0.9rem; color: var(--muted);
+  display: flex; flex-wrap: wrap; gap: 1.4rem; padding: 0.6rem 1.4rem; font-size: 0.9rem; color: var(--muted);
 }
 .stats strong { color: var(--sea); }
 main { padding: 1rem 1.4rem 2rem; flex: 1; }
-table { width: 100%; border-collapse: collapse; }
-th { text-align: left; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
-td, th { padding: 0.4rem 0.5rem; border-bottom: 1px solid var(--line); }
-.click { cursor: pointer; }
-.click:hover { background: #efe8d8; }
-.muted { color: var(--muted); }
 .err { color: #9b2335; }
-.detail { margin-top: 1.2rem; background: var(--card); border: 1px solid var(--line); padding: 1rem; border-radius: 8px; }
-.detail pre { white-space: pre-wrap; font-size: 0.85rem; }
-.bars { max-width: 40rem; }
-.bar-row { display: grid; grid-template-columns: 5rem 1fr 3rem; gap: 0.5rem; align-items: center; margin: 0.25rem 0; }
-.bar { height: 0.7rem; background: #e6e0d4; border-radius: 99px; overflow: hidden; }
-.bar i { display: block; height: 100%; background: var(--sea); }
-.plain { list-style: none; padding: 0; }
-.plain li { margin: 0.35rem 0; }
-.link { background: none; border: none; color: var(--sea); cursor: pointer; font-weight: 600; padding: 0; }
-.bubbles { position: relative; height: 16rem; background: #e8eef0; border-radius: 8px; margin-bottom: 1rem; overflow: hidden; }
-.bubble { position: absolute; color: var(--sea); font-weight: 700; }
-.bubble em { font-style: normal; color: var(--gold); font-size: 0.75em; }
-.editor {
-  margin-top: 1.2rem; display: flex; flex-wrap: wrap; gap: 0.4rem;
-  background: var(--card); padding: 1rem; border: 1px solid var(--line); border-radius: 8px;
-}
-.editor input { padding: 0.35rem 0.5rem; border: 1px solid var(--line); min-width: 10rem; }
 </style>
