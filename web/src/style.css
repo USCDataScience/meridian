@@ -1,0 +1,20 @@
+:root {
+  --ink: #12202a;
+  --muted: #6b7280;
+  --line: #d9d3c7;
+  --paper: #f4f1ea;
+  --card: #fffdf8;
+  --sea: #1a4a5c;
+  --gold: #c9a227;
+}
+* { box-sizing: border-box; }
+html, body, #app { margin: 0; height: 100%; }
+body {
+  font-family: "Source Sans 3", "Segoe UI", Helvetica, Arial, sans-serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+button, input {
+  font: inherit;
+}
+a { color: var(--sea); }
