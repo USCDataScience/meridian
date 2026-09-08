@@ -52,8 +52,8 @@
 </template>
 
 <script setup>
-import { nextTick, onUpdated, ref, watch } from 'vue'
-import { barChart, histogram, pieChart } from '../charts.js'
+import { nextTick, onMounted, ref, watch } from 'vue'
+import { barChart, histogram, paint, pieChart } from '../charts.js'
 import { get } from '../api.js'
 
 const props = defineProps({
@@ -106,14 +106,16 @@ async function pick(u) {
 }
 
 function draw() {
-  const rows = props.measures.slice(0, 12).map(m => ({ label: m.unit, count: m.count }))
-  pieChart(pieEl.value, rows)
-  barChart(barEl.value, rows, { onClick: d => pick(d.label) })
-  histogram(histEl.value, hist.value)
+  paint(() => {
+    const rows = props.measures.slice(0, 12).map(m => ({ label: m.unit, count: m.count }))
+    pieChart(pieEl.value, rows)
+    barChart(barEl.value, rows, { onClick: d => pick(d.label) })
+    histogram(histEl.value, hist.value)
+  })
 }
 
-watch(() => props.measures, () => nextTick(draw), { deep: true })
-onUpdated(draw)
+onMounted(draw)
+watch(() => props.measures, draw, { deep: true })
 </script>
 
 <style scoped>
@@ -122,7 +124,7 @@ onUpdated(draw)
 .go { background: var(--sea); color: #fff; border: none; padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer; }
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0.8rem 1rem; margin-bottom: 1rem; }
-.chart { min-height: 10rem; }
+.chart { width: 100%; min-height: 10rem; }
 table { width: 100%; border-collapse: collapse; margin-top: 0.6rem; }
 th { text-align: left; font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
 td, th { padding: 0.35rem 0.5rem; border-bottom: 1px solid var(--line); }

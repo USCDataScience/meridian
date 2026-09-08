@@ -5,12 +5,18 @@ import world from './world-110m.json'
 export const PALETTE = ['#1a4a5c', '#c9a227', '#3d7a8c', '#9b2335', '#6b8f71', '#c47b3b', '#5c6b8a', '#8a6a4a']
 
 function size(el) {
-  const w = Math.max(280, el.clientWidth || 640)
+  const w = Math.max(280, (el && el.clientWidth) || 640)
   return { w, h: Math.max(180, Math.round(w * 0.42)) }
 }
 
 function clear(el) {
   d3.select(el).selectAll('*').remove()
+}
+
+export function paint(fn) {
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try { fn() } catch (err) { console.error('chart', err) }
+  }))
 }
 
 export function pieChart(el, rows, { label = 'label', value = 'count' } = {}) {
@@ -114,7 +120,8 @@ export function heatmap(el, cells, { onClick } = {}) {
   const X = d3.scaleBand().domain(months).range([m.l, m.l + 12 * (cell + 2)]).padding(0.08)
   const Y = d3.scaleBand().domain(years).range([m.t, h - m.b]).padding(0.08)
   const max = d3.max(data, d => d.mentions) || 1
-  const color = d3.scaleSequential(d3.interpolateYlGnBu).domain([0, max])
+  const interp = d3.interpolateYlGnBu || d3.interpolateBlues || (t => d3.interpolateRgb('#efe8d8', '#1a4a5c')(t))
+  const color = d3.scaleSequential(interp).domain([0, max])
   const lookup = new Map(data.map(d => [`${d.year}-${d.month}`, d]))
   months.forEach(mo => {
     svg.append('text').attr('x', X(mo) + X.bandwidth() / 2).attr('y', 12)
@@ -148,7 +155,14 @@ export function bubbleMap(el, places, { onClick } = {}) {
   const countries = feature(world, world.objects.countries)
   const clipped = {
     type: 'FeatureCollection',
-    features: countries.features.filter(f => d3.geoCentroid(f)[1] > -58)
+    features: (countries.features || []).filter(f => {
+      try {
+        const c = d3.geoCentroid(f)
+        return c && c[1] > -58
+      } catch {
+        return false
+      }
+    })
   }
   const projection = d3.geoMercator().fitExtent([[8, 16], [w - 8, h - 8]], clipped)
   const path = d3.geoPath(projection)
@@ -158,7 +172,10 @@ export function bubbleMap(el, places, { onClick } = {}) {
   const max = d3.max(located, d => d.count) || 1
   const r = d3.scaleSqrt().domain([1, max]).range([3, 28])
   const g = svg.append('g')
-  g.selectAll('circle').data(located).enter().append('circle')
+  g.selectAll('circle').data(located.filter(d => {
+    const xy = projection([d.lon, d.lat])
+    return xy && Number.isFinite(xy[0]) && Number.isFinite(xy[1])
+  })).enter().append('circle')
     .attr('cx', d => projection([d.lon, d.lat])[0])
     .attr('cy', d => projection([d.lon, d.lat])[1])
     .attr('r', d => r(d.count))

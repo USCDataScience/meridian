@@ -128,8 +128,8 @@
 </template>
 
 <script setup>
-import { nextTick, onUpdated, ref, watch } from 'vue'
-import { barChart, pieChart } from '../charts.js'
+import { onMounted, ref, watch } from 'vue'
+import { barChart, paint, pieChart } from '../charts.js'
 
 const props = defineProps({
   documents: { type: Array, default: () => [] },
@@ -163,25 +163,27 @@ function pct(n) {
 }
 
 function draw() {
-  pieChart(mimeEl.value, (props.stats.mime || []).map(d => ({ label: d.mime, count: d.count })))
-  pieChart(langEl.value, (props.stats.languages || []).map(d => ({ label: d.language, count: d.count })))
-  if (props.detail) {
-    barChart(placeEl.value, (props.detail.places || []).slice(0, 12).map(p => ({ label: p.name, count: p.count })))
-    const years = {}
-    ;(props.detail.times || []).forEach(t => { years[t.year] = (years[t.year] || 0) + 1 })
-    barChart(yearEl.value, Object.entries(years).map(([label, count]) => ({ label, count })).slice(-16))
-  }
+  paint(() => {
+    pieChart(mimeEl.value, (props.stats.mime || []).map(d => ({ label: d.mime, count: d.count })))
+    pieChart(langEl.value, (props.stats.languages || []).map(d => ({ label: d.language, count: d.count })))
+    if (props.detail) {
+      barChart(placeEl.value, (props.detail.places || []).slice(0, 12).map(p => ({ label: p.name, count: p.count })))
+      const years = {}
+      ;(props.detail.times || []).forEach(t => { years[t.year] = (years[t.year] || 0) + 1 })
+      barChart(yearEl.value, Object.entries(years).map(([label, count]) => ({ label, count })).slice(-16))
+    }
+  })
 }
 
-watch(() => [props.stats, props.detail, tab.value], () => nextTick(draw), { deep: true })
-onUpdated(draw)
+onMounted(draw)
+watch(() => [props.stats, props.detail, tab.value], draw, { deep: true })
 </script>
 
 <style scoped>
 .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1.2rem; }
 .wide { grid-column: 1 / -1; }
 .card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 0.8rem 1rem; }
-.chart { min-height: 8rem; }
+.chart { width: 100%; min-height: 8rem; }
 .nums { width: 100%; border-collapse: collapse; }
 .nums th, .nums td { padding: 0.3rem 0.5rem; border-bottom: 1px solid var(--line); text-align: right; }
 .nums th:first-child, .nums td:first-child { text-align: left; }

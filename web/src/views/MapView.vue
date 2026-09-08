@@ -16,8 +16,8 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onUpdated, ref, watch } from 'vue'
-import { bubbleMap } from '../charts.js'
+import { computed, onMounted, ref, watch } from 'vue'
+import { bubbleMap, paint } from '../charts.js'
 
 const props = defineProps({ places: { type: Array, default: () => [] } })
 const emit = defineEmits(['place'])
@@ -29,12 +29,12 @@ const unresolved = computed(() => props.places.filter(p => p.lat == null))
 const shown = computed(() => props.places.slice(0, top.value))
 
 function draw() {
-  bubbleMap(mapEl.value, located.value.slice(0, top.value), {
+  paint(() => bubbleMap(mapEl.value, located.value.slice(0, top.value), {
     onClick: p => emit('place', p.name)
-  })
+  }))
 }
-watch(() => [props.places, top.value], () => nextTick(draw), { deep: true })
-onUpdated(draw)
+onMounted(draw)
+watch(() => [props.places, top.value], draw, { deep: true })
 </script>
 
 <style scoped>

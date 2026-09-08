@@ -18,8 +18,8 @@
 </template>
 
 <script setup>
-import { nextTick, onUpdated, ref, watch } from 'vue'
-import { barChart } from '../charts.js'
+import { onMounted, ref, watch } from 'vue'
+import { barChart, paint } from '../charts.js'
 import { post } from '../api.js'
 
 const props = defineProps({ conceptList: { type: Array, default: () => [] } })
@@ -30,12 +30,12 @@ const label = ref('')
 const aliases = ref('')
 
 function draw() {
-  barChart(barEl.value, props.conceptList.filter(c => c.hits).map(c => ({ label: c.label, count: c.hits })), {
+  paint(() => barChart(barEl.value, props.conceptList.filter(c => c.hits).map(c => ({ label: c.label, count: c.hits })), {
     onClick: d => {
       const hit = props.conceptList.find(c => c.label === d.label)
       if (hit) emit('concept', hit.id)
     }
-  })
+  }))
 }
 
 async function add() {
@@ -48,12 +48,12 @@ async function add() {
   emit('reload')
 }
 
-watch(() => props.conceptList, () => nextTick(draw), { deep: true })
-onUpdated(draw)
+onMounted(draw)
+watch(() => props.conceptList, draw, { deep: true })
 </script>
 
 <style scoped>
-.chart { min-height: 8rem; }
+.chart { width: 100%; min-height: 8rem; }
 .plain { list-style: none; padding: 0; }
 .plain li { margin: 0.35rem 0; }
 .link { background: none; border: none; color: var(--sea); cursor: pointer; font-weight: 600; padding: 0; }

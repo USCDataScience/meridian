@@ -72,7 +72,9 @@ const views = [
   { id: 'concepts', label: 'Concepts' },
   { id: 'measures', label: 'Measurements' }
 ]
-const view = ref('docs')
+const allowed = new Set(views.map(v => v.id))
+const initial = new URLSearchParams(location.search).get('view')
+const view = ref(allowed.has(initial) ? initial : 'docs')
 const filters = reactive({ q: '', concept: '', place: '', year_min: '', year_max: '', unit: '' })
 const stats = ref({})
 const documents = ref([])
