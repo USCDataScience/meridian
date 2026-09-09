@@ -38,6 +38,9 @@ def nlp():
     return _nlp
 
 
+TAG = re.compile(r"<[^>]+>")
+
+
 def tika_parse(path):
     from tika import parser
     parsed = parser.from_file(str(path))
@@ -49,7 +52,31 @@ def tika_parse(path):
     if isinstance(mime, list):
         mime = mime[0]
     mime = mime.split(";")[0].strip()
-    return text.strip(), mime, meta
+    xhtml = None
+    try:
+        xml_parsed = parser.from_file(str(path), xmlContent=True)
+        raw = xml_parsed.get("content") or ""
+        if isinstance(raw, list):
+            raw = "\n".join(raw)
+        xhtml = raw or None
+    except Exception:
+        xhtml = None
+    return text.strip(), mime, meta, xhtml
+
+
+def text_to_tag_ratio(xhtml):
+    """Text-to-tag ratio: visible text characters / number of markup tags (Tika XHTML)."""
+    if not xhtml or "<" not in xhtml:
+        return None, 0
+    tags = TAG.findall(xhtml)
+    n_tags = len(tags)
+    if not n_tags:
+        return None, 0
+    text = TAG.sub(" ", xhtml)
+    text = re.sub(r"\s+", " ", text).strip()
+    if not text:
+        return None, n_tags
+    return len(text) / n_tags, n_tags
 
 
 def _meta_str(meta, key):
@@ -91,7 +118,7 @@ def language_of(meta, text=None):
     return None
 
 
-def text_stats(text, path=None, meta=None):
+def text_stats(text, path=None, meta=None, xhtml=None):
     blob = text or ""
     tokens = TOKEN.findall(blob)
     words = [t.lower() for t in tokens]
@@ -101,6 +128,7 @@ def text_stats(text, path=None, meta=None):
     flat = flatten_meta(meta)
     meta_size = len(json.dumps(flat, ensure_ascii=False).encode("utf-8"))
     n = len(words)
+    ttr, tag_count = text_to_tag_ratio(xhtml)
     return {
         "file_size": file_size,
         "text_size": text_size,
@@ -108,7 +136,9 @@ def text_stats(text, path=None, meta=None):
         "language": language_of(meta, blob),
         "word_count": n,
         "unique_terms": len(unique),
-        "ttr": (len(unique) / n) if n else None,
+        "type_token": (len(unique) / n) if n else None,
+        "ttr": ttr,
+        "tag_count": tag_count,
         "metadata": flat,
         "text_yield": (text_size / file_size) if file_size else None,
         "meta_yield": (meta_size / file_size) if file_size else None,
@@ -180,7 +210,7 @@ def analyze(text):
     places = Counter()
     date_surfaces = []
     for ent in doc.ents:
-        if ent.label_ in ("GPE", "LOC", "FAC"):
+        if ent.label_ in ("GPE", "LOC"):
             name = " ".join(ent.text.split())
             if name.lower().startswith("the "):
                 name = name[4:]

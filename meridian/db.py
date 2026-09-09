@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS documents (
   word_count INTEGER,
   unique_terms INTEGER,
   ttr REAL,
+  tag_count INTEGER,
   metadata TEXT,
   indexed_at TEXT DEFAULT (datetime('now'))
 );
@@ -91,10 +92,14 @@ def _migrate(db):
         ("word_count", "INTEGER"),
         ("unique_terms", "INTEGER"),
         ("ttr", "REAL"),
+        ("tag_count", "INTEGER"),
         ("metadata", "TEXT"),
     ):
         if col not in cols:
             db.execute(f"ALTER TABLE documents ADD COLUMN {col} {spec}")
+            if col == "tag_count":
+                # ttr used to store type–token ratio; TTR is text-to-tag.
+                db.execute("UPDATE documents SET ttr = NULL")
     tcols = {r[1] for r in db.execute("PRAGMA table_info(times)")}
     if "month" not in tcols:
         db.execute("ALTER TABLE times ADD COLUMN month INTEGER")
@@ -104,7 +109,7 @@ def _migrate(db):
 
 def connect(path=None):
     ensure_data()
-    db = sqlite3.connect(path or DB_PATH)
+    db = sqlite3.connect(path or DB_PATH, timeout=60)
     db.row_factory = sqlite3.Row
     db.execute("PRAGMA foreign_keys = ON")
     db.executescript(SCHEMA)
@@ -114,7 +119,7 @@ def connect(path=None):
 
 
 def reset(path=None):
-    """Empty the catalog but keep the Nominatim cache."""
+    """Empty the catalog. The GeoNames gazetteer is not the catalog."""
     db = connect(path)
     db.execute("DELETE FROM documents")
     db.commit()
@@ -128,13 +133,13 @@ def insert_document(db, path, filename, mime, text, year, stats=None):
         """INSERT INTO documents(
              path, filename, mime, text, year,
              file_size, text_size, meta_size, language,
-             word_count, unique_terms, ttr, metadata
-           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)""",
+             word_count, unique_terms, ttr, tag_count, metadata
+           ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
         (
             path, filename, mime, text, year,
             stats.get("file_size"), stats.get("text_size"), stats.get("meta_size"),
             stats.get("language"), stats.get("word_count"), stats.get("unique_terms"),
-            stats.get("ttr"), json.dumps(meta, ensure_ascii=False),
+            stats.get("ttr"), stats.get("tag_count"), json.dumps(meta, ensure_ascii=False),
         ),
     )
     return cur.lastrowid

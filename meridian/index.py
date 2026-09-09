@@ -48,13 +48,15 @@ def index_paths(paths, resolve_geo=True):
         return 0
     conn = store.connect()
     lib = conceptlib.load()
+    if resolve_geo:
+        geo.ensure()
     n = 0
     total = len(files)
     for i, f in enumerate(files, 1):
         rel = str(f)
         print(f"index [{i}/{total}] {rel}")
         try:
-            text, mime, meta = extract.tika_parse(f)
+            text, mime, meta, xhtml = extract.tika_parse(f)
         except Exception as e:
             print(f"  tika failed: {e}")
             continue
@@ -62,20 +64,13 @@ def index_paths(paths, resolve_geo=True):
         times = extract.times_from_text(text, meta, date_surfaces)
         years = [t["year"] for t in times]
         year = Counter(years).most_common(1)[0][0] if years else None
-        stats = extract.text_stats(text, f, meta)
+        stats = extract.text_stats(text, f, meta, xhtml)
         existing = store.document_id_for_path(conn, rel)
         if existing:
             store.clear_document_annotations(conn, existing)
             conn.execute("DELETE FROM documents WHERE id=?", (existing,))
         doc_id = store.insert_document(conn, rel, f.name, mime, text, year, stats)
-        for name, count in places.items():
-            lat = lon = None
-            if resolve_geo:
-                lat, lon, _ = geo.lookup(conn, name)
-            conn.execute(
-                "INSERT INTO places(document_id, name, lat, lon, count) VALUES (?,?,?,?,?)",
-                (doc_id, name, lat, lon, count),
-            )
+        placed = _store_places(conn, doc_id, places, resolve_geo)
         for t in times:
             conn.execute(
                 "INSERT INTO times(document_id, year, month, surface) VALUES (?,?,?,?)",
@@ -94,10 +89,53 @@ def index_paths(paths, resolve_geo=True):
         conn.commit()
         n += 1
         print(
-            f"  {mime or 'unknown'}  year={year}  places={len(places)}  "
+            f"  {mime or 'unknown'}  year={year}  places={placed}/{len(places)}  "
             f"times={len(times)}  yield={stats.get('text_yield')}"
         )
     print(f"indexed {n} file(s) at {datetime.now():%H:%M:%S}")
+    return n
+
+
+def _store_places(conn, doc_id, places, resolve_geo):
+    if resolve_geo:
+        resolved = geo.resolve(places)
+        for item in resolved:
+            conn.execute(
+                "INSERT INTO places(document_id, name, lat, lon, count) VALUES (?,?,?,?,?)",
+                (doc_id, item["name"], item["lat"], item["lon"], item["count"]),
+            )
+        return len(resolved)
+    for name, count in places.items():
+        conn.execute(
+            "INSERT INTO places(document_id, name, lat, lon, count) VALUES (?,?,?,?,?)",
+            (doc_id, name, None, None, count),
+        )
+    return len(places)
+
+
+def regeocode(resolve_geo=True):
+    """Re-NER GPE/LOC from stored text and resolve against the local gazetteer."""
+    conn = store.connect()
+    rows = conn.execute("SELECT id, filename, text FROM documents").fetchall()
+    if not rows:
+        print("Nothing to geocode.")
+        return 0
+    if resolve_geo:
+        geo.ensure()
+    total = len(rows)
+    n = 0
+    hits = 0
+    mentioned = 0
+    for i, row in enumerate(rows, 1):
+        places, _ = extract.analyze(row["text"] or "")
+        mentioned += len(places)
+        conn.execute("DELETE FROM places WHERE document_id=?", (row["id"],))
+        placed = _store_places(conn, row["id"], places, resolve_geo)
+        hits += placed
+        conn.commit()
+        n += 1
+        print(f"geocode [{i}/{total}] {row['filename']}  {placed}/{len(places)}")
+    print(f"geocoded {n} document(s), {hits}/{mentioned} places resolved")
     return n
 
 
