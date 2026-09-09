@@ -23,15 +23,14 @@
       </li>
     </ul>
     <p v-if="listSource.length" class="muted">Showing {{ shown.length }} of {{ listSource.length }}</p>
-    <div ref="moreEl" class="sentinel"></div>
     <button v-if="shown.length < listSource.length" class="more" @click="loadMore">
-      More places ({{ listSource.length - shown.length }} left)
+      Load more ({{ listSource.length - shown.length }} left)
     </button>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { bubbleMap, paint } from '../charts.js'
 
 const PAGE = 25
@@ -42,7 +41,6 @@ const props = defineProps({
 const emit = defineEmits(['place'])
 
 const mapEl = ref(null)
-const moreEl = ref(null)
 const top = ref(80)
 const shownN = ref(PAGE)
 const located = computed(() => props.places.filter(p => p.lat != null && p.lon != null))
@@ -72,26 +70,12 @@ function loadMore() {
   shownN.value = Math.min(shownN.value + PAGE, listSource.value.length)
 }
 
-let observer
-function bindObserver() {
-  observer?.disconnect()
-  if (!moreEl.value) return
-  observer = new IntersectionObserver((entries) => {
-    if (entries.some(e => e.isIntersecting)) loadMore()
-  }, { rootMargin: '80px' })
-  observer.observe(moreEl.value)
-}
-
 function draw() {
   paint(() => bubbleMap(mapEl.value, mapPlaces.value, {
     onClick: p => emit('place', p.name)
   }))
 }
-onMounted(() => {
-  draw()
-  bindObserver()
-})
-onUnmounted(() => observer?.disconnect())
+onMounted(draw)
 watch(() => [props.places, props.selected, top.value], draw, { deep: true })
 watch(() => [props.places, props.selected], () => { shownN.value = PAGE })
 </script>
@@ -104,7 +88,6 @@ watch(() => [props.places, props.selected], () => { shownN.value = PAGE })
 .link { background: none; border: none; color: var(--sea); cursor: pointer; font-weight: 600; padding: 0; }
 .muted { color: var(--muted); }
 h3 { margin: 0.8rem 0 0.3rem; font-size: 0.95rem; color: var(--sea); }
-.sentinel { height: 1px; }
 .more {
   margin: 0.5rem 0 1rem; background: var(--sea); color: #fff; border: none;
   padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer;
