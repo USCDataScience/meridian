@@ -22,13 +22,19 @@
         <span class="muted">{{ p.count }} · {{ p.lat != null ? p.lat.toFixed(2)+','+p.lon.toFixed(2) : 'unresolved' }}</span>
       </li>
     </ul>
+    <p v-if="listSource.length" class="muted">Showing {{ shown.length }} of {{ listSource.length }}</p>
+    <div ref="moreEl" class="sentinel"></div>
+    <button v-if="shown.length < listSource.length" class="more" @click="loadMore">
+      More places ({{ listSource.length - shown.length }} left)
+    </button>
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { bubbleMap, paint } from '../charts.js'
 
+const PAGE = 25
 const props = defineProps({
   places: { type: Array, default: () => [] },
   selected: { type: String, default: '' }
@@ -36,7 +42,9 @@ const props = defineProps({
 const emit = defineEmits(['place'])
 
 const mapEl = ref(null)
+const moreEl = ref(null)
 const top = ref(80)
+const shownN = ref(PAGE)
 const located = computed(() => props.places.filter(p => p.lat != null && p.lon != null))
 const unresolved = computed(() => props.places.filter(p => p.lat == null))
 const selectedPlace = computed(() => {
@@ -48,23 +56,44 @@ const mapPlaces = computed(() => {
   if (selectedPlace.value) return [selectedPlace.value]
   return located.value.slice(0, top.value)
 })
-const shown = computed(() => {
-  if (!props.selected) return props.places.slice(0, top.value)
-  return props.places.filter(p => p.name !== selectedPlace.value?.name).slice(0, top.value)
+const listSource = computed(() => {
+  if (!props.selected) return props.places
+  return props.places.filter(p => p.name !== selectedPlace.value?.name)
 })
+const shown = computed(() => listSource.value.slice(0, shownN.value))
 const otherCount = computed(() => Math.max(0, props.places.length - 1))
 const documentsHint = computed(() => {
   const p = selectedPlace.value
   return p ? (p.count + ' mentions') : ''
 })
 
+function loadMore() {
+  if (shownN.value >= listSource.value.length) return
+  shownN.value = Math.min(shownN.value + PAGE, listSource.value.length)
+}
+
+let observer
+function bindObserver() {
+  observer?.disconnect()
+  if (!moreEl.value) return
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(e => e.isIntersecting)) loadMore()
+  }, { rootMargin: '80px' })
+  observer.observe(moreEl.value)
+}
+
 function draw() {
   paint(() => bubbleMap(mapEl.value, mapPlaces.value, {
     onClick: p => emit('place', p.name)
   }))
 }
-onMounted(draw)
+onMounted(() => {
+  draw()
+  bindObserver()
+})
+onUnmounted(() => observer?.disconnect())
 watch(() => [props.places, props.selected, top.value], draw, { deep: true })
+watch(() => [props.places, props.selected], () => { shownN.value = PAGE })
 </script>
 
 <style scoped>
@@ -75,5 +104,10 @@ watch(() => [props.places, props.selected, top.value], draw, { deep: true })
 .link { background: none; border: none; color: var(--sea); cursor: pointer; font-weight: 600; padding: 0; }
 .muted { color: var(--muted); }
 h3 { margin: 0.8rem 0 0.3rem; font-size: 0.95rem; color: var(--sea); }
+.sentinel { height: 1px; }
+.more {
+  margin: 0.5rem 0 1rem; background: var(--sea); color: #fff; border: none;
+  padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer;
+}
 @media (max-width: 800px) { .plain { columns: 1; } }
 </style>
