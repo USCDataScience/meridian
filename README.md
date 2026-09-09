@@ -45,6 +45,4 @@ entities, and measurements share one filter bar. The concept form appends to
 `concepts.yaml` and rematches. Copy the URL to share a cut; Export JSON / CSV
 to take it elsewhere.
 
-Inspired by Polar Deep Insights (USC IRDS).
-
-Docs: [wiki](https://github.com/chrismattmann/meridian/wiki). Apache License 2.0.
+Inspired by USC IRDS Polar Deep Insights.
