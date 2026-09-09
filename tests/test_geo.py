@@ -93,12 +93,14 @@ class GeoResolveTest(unittest.TestCase):
 class ExtractPlacesTest(unittest.TestCase):
     def test_drops_facilities(self):
         from meridian import extract
-        places, _ = extract.analyze(
+        ner = extract.analyze(
             "The Viterbi School of Engineering is in Los Angeles, California."
         )
-        names = {n.lower() for n in places}
+        names = {n.lower() for n in ner["places"]}
         self.assertNotIn("viterbi", names)
         self.assertTrue({"los angeles", "california"} & names)
+        orgs = {n.lower() for n in ner["orgs"]}
+        self.assertTrue(any("viterbi" in n or "engineering" in n for n in orgs))
 
 
 if __name__ == "__main__":

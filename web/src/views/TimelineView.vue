@@ -8,6 +8,9 @@
     </p>
     <h3>Full span</h3>
     <div ref="ribbonEl" class="chart ribbon"></div>
+    <h3>Mentions by decade</h3>
+    <p class="muted">Symmetric log on Y so 1500s stay visible next to 2000s. Click a decade to filter.</p>
+    <div ref="decEl" class="chart area"></div>
     <h3>Decades with dates</h3>
     <div ref="decHeatEl" class="chart"></div>
     <h3>Year × month</h3>
@@ -16,14 +19,12 @@
     <button v-if="visibleYearList.length < allYearList.length" class="more" @click="monthPage += 50">
       Load more ({{ allYearList.length - visibleYearList.length }} left)
     </button>
-    <h3>Mentions by decade</h3>
-    <div ref="decEl" class="chart"></div>
   </section>
 </template>
 
 <script setup>
 import { computed, onMounted, ref, watch } from 'vue'
-import { barChart, decadeHeatmap, heatmap, paint, yearRibbon } from '../charts.js'
+import { decadeArea, decadeHeatmap, heatmap, paint, yearRibbon } from '../charts.js'
 
 const props = defineProps({ timeline: { type: Object, default: () => ({ years: [], heatmap: [], decades: [] }) } })
 const emit = defineEmits(['year', 'range'])
@@ -76,11 +77,7 @@ function draw() {
     yearRibbon(ribbonEl.value, years, { onClick: d => emit('year', d.year) })
     decadeHeatmap(decHeatEl.value, years, { onClick: d => emit('year', d.year) })
     heatmap(heatEl.value, monthCells(), { onClick: d => emit('year', d.year), newestFirst: true })
-    barChart(decEl.value, (props.timeline.decades || []).slice().reverse().map(d => ({
-      label: String(d.decade) + 's',
-      count: d.mentions,
-      decade: d.decade
-    })), {
+    decadeArea(decEl.value, props.timeline.decades || [], {
       onClick: d => emit('range', { min: d.decade, max: d.decade + 9 })
     })
   })
@@ -94,6 +91,7 @@ watch(() => props.timeline, () => { monthPage.value = 50 })
 h3 { margin: 1rem 0 0.3rem; font-size: 0.95rem; color: var(--sea); }
 .chart { width: 100%; min-height: 4rem; }
 .ribbon { min-height: 4.2rem; }
+.area { min-height: 14rem; }
 .muted { color: var(--muted); }
 .muted em { font-style: italic; }
 .more {

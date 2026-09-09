@@ -116,7 +116,16 @@ export function barChart(el, rows, { x = 'label', y = 'count', onClick } = {}) {
     .attr('rx', 3)
     .style('cursor', onClick ? 'pointer' : 'default')
     .on('click', (_, d) => onClick && onClick(d))
-  bindTip(bars, d => `<strong>${d[x]}</strong><br>${d[y]} · ${(100 * d[y] / total).toFixed(1)}%`)
+  bindTip(bars, d => {
+    const bits = [`<strong>${d[x]}</strong>`]
+    if (d.hits != null && d.score != null && y === 'score') {
+      bits.push(`score ${Number(d[y]).toFixed(2)} · ${d.hits} hits`)
+    } else {
+      bits.push(`${d[y]}`)
+    }
+    if (d.documents != null) bits.push(`${d.documents} docs`)
+    return bits.join('<br>')
+  })
   svg.selectAll('n').data(data).enter().append('text')
     .attr('x', m.l - 6).attr('y', d => Y(d[x]) + Y.bandwidth() / 2 + 4)
     .attr('text-anchor', 'end').attr('font-size', 11).attr('fill', '#12202a')
@@ -124,7 +133,7 @@ export function barChart(el, rows, { x = 'label', y = 'count', onClick } = {}) {
   svg.selectAll('v').data(data).enter().append('text')
     .attr('x', d => X(d[y]) + 4).attr('y', d => Y(d[x]) + Y.bandwidth() / 2 + 4)
     .attr('font-size', 10).attr('fill', '#6b7280')
-    .text(d => d[y])
+    .text(d => (typeof d[y] === 'number' && y === 'score') ? d[y].toFixed(1) : d[y])
 }
 
 export function histogram(el, bins, { onClick } = {}) {
@@ -242,6 +251,119 @@ export function yearRibbon(el, years, { onClick } = {}) {
   })
 }
 
+export function decadeArea(el, decades, { onClick } = {}) {
+  if (!el) return
+  clear(el)
+  const raw = (decades || []).filter(d => d.decade != null)
+  if (!raw.length) return
+  const byDec = new Map(raw.map(d => [d.decade, d]))
+  const minD = d3.min(raw, d => d.decade)
+  const maxD = d3.max(raw, d => d.decade)
+  const all = d3.range(minD, maxD + 1, 10).map(decade => (
+    byDec.get(decade) || { decade, mentions: 0, documents: 0 }
+  ))
+  const total = d3.sum(all, d => d.mentions) || 1
+  const { w } = size(el)
+  const h = 220
+  const m = { t: 18, r: 36, b: 32, l: 42 }
+  const svg = d3.select(el).append('svg').attr('width', w).attr('height', h)
+  const X = d3.scaleLinear().domain([minD, maxD]).range([m.l, w - m.r])
+  const Y = d3.scaleSymlog()
+    .constant(20)
+    .domain([0, d3.max(all, d => d.mentions) || 1])
+    .range([h - m.b, m.t])
+  const area = d3.area()
+    .x(d => X(d.decade))
+    .y0(Y(0))
+    .y1(d => Y(d.mentions))
+    .curve(d3.curveMonotoneX)
+  const line = d3.line()
+    .x(d => X(d.decade))
+    .y(d => Y(d.mentions))
+    .curve(d3.curveMonotoneX)
+
+  svg.append('path').datum(all).attr('fill', '#1a4a5c').attr('fill-opacity', 0.16).attr('d', area)
+  svg.append('path').datum(all).attr('fill', 'none').attr('stroke', '#1a4a5c')
+    .attr('stroke-width', 1.8).attr('d', line)
+
+  const gx = svg.append('g').attr('transform', `translate(0,${h - m.b})`)
+    .call(d3.axisBottom(X)
+      .tickValues(d3.range(Math.ceil(minD / 100) * 100, maxD + 1, 100))
+      .tickFormat(d3.format('d'))
+      .tickSizeOuter(0))
+  gx.selectAll('text').attr('font-size', 10).attr('fill', '#6b7280')
+  gx.selectAll('line, path').attr('stroke', '#d9d3c7')
+
+  const yTicks = [0, 100, 1000].filter(v => v <= (d3.max(all, d => d.mentions) || 0))
+  const gy = svg.append('g').attr('transform', `translate(${m.l},0)`)
+    .call(d3.axisLeft(Y).tickValues(yTicks).tickSize(-(w - m.l - m.r)).tickFormat(d3.format('~s')))
+  gy.select('.domain').remove()
+  gy.selectAll('text').attr('font-size', 10).attr('fill', '#6b7280')
+  gy.selectAll('.tick line').attr('stroke', '#efe8d8')
+
+  const peak = all.slice().sort((a, b) => b.mentions - a.mentions)[0]
+  if (peak && peak.mentions) {
+    svg.append('text')
+      .attr('x', X(peak.decade) + 8)
+      .attr('y', Y(peak.mentions) - 6)
+      .attr('font-size', 11)
+      .attr('fill', '#1a4a5c')
+      .text(`${peak.decade}s · ${peak.mentions}`)
+  }
+
+  svg.selectAll('dot').data(all.filter(d => d.mentions)).enter().append('circle')
+    .attr('cx', d => X(d.decade))
+    .attr('cy', d => Y(d.mentions))
+    .attr('r', 2.5)
+    .attr('fill', '#1a4a5c')
+    .style('pointer-events', 'none')
+
+  const rule = svg.append('line')
+    .attr('y1', m.t).attr('y2', h - m.b)
+    .attr('stroke', '#c9a227').attr('stroke-width', 1)
+    .style('display', 'none')
+  const focus = svg.append('circle')
+    .attr('r', 5).attr('fill', '#c9a227').attr('stroke', '#fffdf8').attr('stroke-width', 1.5)
+    .style('display', 'none')
+
+  function nearest(xm) {
+    let decade = Math.round(X.invert(xm) / 10) * 10
+    decade = Math.max(minD, Math.min(maxD, decade))
+    return all.find(d => d.decade === decade) || all[0]
+  }
+
+  function tipHtml(d) {
+    const pct = (100 * d.mentions / total).toFixed(1)
+    if (!d.mentions) return `<strong>${d.decade}s</strong><br>no extracted dates`
+    return `<strong>${d.decade}s</strong><br>${d.mentions} mentions · ${d.documents} docs · ${pct}%`
+  }
+
+  svg.append('rect')
+    .attr('x', m.l).attr('y', m.t)
+    .attr('width', Math.max(0, w - m.l - m.r))
+    .attr('height', Math.max(0, h - m.t - m.b))
+    .attr('fill', 'transparent')
+    .style('cursor', onClick ? 'pointer' : 'crosshair')
+    .on('pointermove', ev => {
+      const [xm] = d3.pointer(ev, svg.node())
+      const d = nearest(xm)
+      rule.attr('x1', X(d.decade)).attr('x2', X(d.decade)).style('display', null)
+      focus.attr('cx', X(d.decade)).attr('cy', Y(d.mentions))
+        .style('display', d.mentions ? null : 'none')
+      showTip(tipHtml(d), ev)
+    })
+    .on('pointerleave', () => {
+      hideTip()
+      rule.style('display', 'none')
+      focus.style('display', 'none')
+    })
+    .on('click', ev => {
+      const [xm] = d3.pointer(ev, svg.node())
+      const d = nearest(xm)
+      if (d.mentions && onClick) onClick(d)
+    })
+}
+
 export function decadeHeatmap(el, years, { onClick } = {}) {
   if (!el) return
   clear(el)
@@ -282,7 +404,7 @@ export function decadeHeatmap(el, years, { onClick } = {}) {
   })
 }
 
-export function bubbleMap(el, places, { onClick } = {}) {
+export function bubbleMap(el, places, { onClick, onBrush, brushable = false, metric = 'score' } = {}) {
   if (!el) return
   clear(el)
   const located = (places || []).filter(p => p.lat != null && p.lon != null)
@@ -307,30 +429,121 @@ export function bubbleMap(el, places, { onClick } = {}) {
   svg.append('path').datum(clipped).attr('d', path).attr('fill', '#c5d0d4')
     .attr('stroke', '#9aafb6').attr('stroke-width', 0.4)
     .style('pointer-events', 'none')
-  if (!located.length) return
-  const pts = located.map(d => {
-    const xy = projection([d.lon, d.lat])
-    return xy && Number.isFinite(xy[0]) ? { ...d, x: xy[0], y: xy[1] } : null
-  }).filter(Boolean).sort((a, b) => b.count - a.count)
-  const max = d3.max(pts, d => d.count) || 1
-  const r = d3.scaleSqrt().domain([1, max]).range([5, 28])
-  const g = svg.append('g')
-  const hits = g.selectAll('hit').data(pts).enter().append('circle')
-    .attr('cx', d => d.x).attr('cy', d => d.y)
-    .attr('r', d => Math.max(12, r(d.count) + 6))
-    .attr('fill', 'transparent')
-    .style('cursor', 'pointer')
-    .on('click', (ev, d) => {
-      ev.stopPropagation()
-      onClick && onClick(d)
+  if (located.length) {
+    const pts = located.map(d => {
+      const xy = projection([d.lon, d.lat])
+      return xy && Number.isFinite(xy[0]) ? { ...d, x: xy[0], y: xy[1] } : null
+    }).filter(Boolean).sort((a, b) => (b.score || b.count) - (a.score || a.count))
+    const val = d => (metric === 'score' && d.score != null ? d.score : d.count) || 0
+    const max = d3.max(pts, val) || 1
+    const r = d3.scaleSqrt().domain([0, max]).range([5, 28])
+    const g = svg.append('g')
+    const hits = g.selectAll('hit').data(pts).enter().append('circle')
+      .attr('cx', d => d.x).attr('cy', d => d.y)
+      .attr('r', d => Math.max(12, r(val(d)) + 6))
+      .attr('fill', 'transparent')
+      .style('cursor', brushable ? 'crosshair' : 'pointer')
+      .style('pointer-events', brushable ? 'none' : 'all')
+      .on('click', (ev, d) => {
+        ev.stopPropagation()
+        onClick && onClick(d)
+      })
+    bindTip(hits, d => {
+      const bits = [`<strong>${d.name}</strong>`, `${d.count} mentions`]
+      if (d.documents != null) bits.push(`${d.documents} docs`)
+      if (d.score != null) bits.push(`score ${d.score.toFixed(2)}`)
+      bits.push(`${d.lat.toFixed(2)}, ${d.lon.toFixed(2)}`, `<em>click to filter</em>`)
+      return bits.join('<br>')
     })
-  bindTip(hits, d => `<strong>${d.name}</strong><br>${d.count} mentions<br>${d.lat.toFixed(2)}, ${d.lon.toFixed(2)}<br><em>click to filter</em>`)
-  g.selectAll('dot').data(pts).enter().append('circle')
+    g.selectAll('dot').data(pts).enter().append('circle')
+      .attr('cx', d => d.x).attr('cy', d => d.y)
+      .attr('r', d => r(val(d)))
+      .attr('fill', '#1a4a5c')
+      .attr('fill-opacity', 0.45)
+      .attr('stroke', '#c9a227')
+      .attr('stroke-width', 1)
+      .style('pointer-events', 'none')
+  }
+  if (brushable && onBrush) {
+    const brush = d3.brush()
+      .extent([[0, 0], [w, h]])
+      .on('end', ev => {
+        if (!ev.selection) return
+        const [[x0, y0], [x1, y1]] = ev.selection
+        const a = projection.invert([x0, y1])
+        const b = projection.invert([x1, y0])
+        if (!a || !b || !Number.isFinite(a[0]) || !Number.isFinite(b[0])) return
+        onBrush({
+          west: Math.min(a[0], b[0]),
+          south: Math.min(a[1], b[1]),
+          east: Math.max(a[0], b[0]),
+          north: Math.max(a[1], b[1])
+        })
+      })
+    svg.append('g').attr('class', 'brush').call(brush)
+  }
+}
+
+export function cooccurGraph(el, graph, { onClick, metric = 'score' } = {}) {
+  if (!el) return
+  clear(el)
+  const nodes = (graph?.nodes || []).map(d => ({ ...d }))
+  const links = (graph?.links || []).map(d => ({ ...d }))
+  if (!nodes.length) return
+  const maxW = Math.max(280, (el && el.clientWidth) || 640)
+  const val = d => (metric === 'score' && d.score != null ? d.score : d.hits) || 0
+  const maxH = d3.max(nodes, val) || 1
+  const r = d3.scaleSqrt().domain([0, maxH]).range([14, 36])
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d => d.id).distance(90).strength(0.4))
+    .force('charge', d3.forceManyBody().strength(-280))
+    .force('center', d3.forceCenter(0, 0))
+    .force('collide', d3.forceCollide().radius(d => r(val(d)) + 16))
+    .stop()
+  for (let i = 0; i < 180; i++) sim.tick()
+  const labelGap = 16
+  const x0 = d3.min(nodes, d => d.x - r(val(d)))
+  const x1 = d3.max(nodes, d => d.x + r(val(d)))
+  const y0 = d3.min(nodes, d => d.y - r(val(d)))
+  const y1 = d3.max(nodes, d => d.y + r(val(d)) + labelGap)
+  const bw = Math.max(1, x1 - x0)
+  const bh = Math.max(1, y1 - y0)
+  const pad = 12
+  const targetH = 420
+  const scale = Math.min((maxW - 2 * pad) / bw, (targetH - 2 * pad) / bh)
+  const w = Math.round(bw * scale + 2 * pad)
+  const h = Math.round(bh * scale + 2 * pad)
+  const svg = d3.select(el).append('svg').attr('width', w).attr('height', h)
+  const g = svg.append('g').attr(
+    'transform',
+    `translate(${pad - x0 * scale},${pad - y0 * scale}) scale(${scale})`
+  )
+  const link = g.selectAll('line').data(links).enter().append('line')
+    .attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+    .attr('x2', d => d.target.x).attr('y2', d => d.target.y)
+    .attr('stroke', '#9aafb6')
+    .attr('stroke-width', d => Math.max(1.2, Math.min(6, d.documents / 3)) / scale)
+  bindTip(link, d => `${d.source.label} · ${d.target.label}<br>${d.documents} documents together`)
+  const node = g.selectAll('node').data(nodes).enter().append('g')
+    .style('cursor', 'pointer')
+    .on('click', (_, d) => onClick && onClick(d))
+  node.append('circle')
     .attr('cx', d => d.x).attr('cy', d => d.y)
-    .attr('r', d => r(d.count))
-    .attr('fill', '#1a4a5c')
-    .attr('fill-opacity', 0.45)
-    .attr('stroke', '#c9a227')
-    .attr('stroke-width', 1)
-    .style('pointer-events', 'none')
+    .attr('r', d => r(val(d)))
+    .attr('fill', d => d.selected ? '#c9a227' : '#1a4a5c')
+    .attr('fill-opacity', 0.85)
+    .attr('stroke', '#fffdf8')
+    .attr('stroke-width', 1.5 / scale)
+  node.append('text')
+    .attr('x', d => d.x).attr('y', d => d.y + r(val(d)) + 13)
+    .attr('text-anchor', 'middle')
+    .attr('font-size', 13 / scale)
+    .attr('fill', '#12202a')
+    .text(d => d.label)
+  bindTip(node, d => {
+    const bits = [`<strong>${d.label}</strong>`, `${d.hits} hits · ${d.documents} docs`]
+    if (d.score != null) bits.push(`score ${d.score.toFixed(2)}`)
+    bits.push(`<em>click to add filter</em>`)
+    return bits.join('<br>')
+  })
 }

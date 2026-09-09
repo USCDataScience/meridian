@@ -68,6 +68,17 @@ CREATE TABLE IF NOT EXISTS concept_hits (
   FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_concept_hits ON concept_hits(concept_id);
+CREATE TABLE IF NOT EXISTS entities (
+  id INTEGER PRIMARY KEY,
+  document_id INTEGER NOT NULL,
+  name TEXT NOT NULL,
+  label TEXT NOT NULL,
+  count INTEGER DEFAULT 1,
+  FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_entities_label ON entities(label);
+CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name);
+CREATE INDEX IF NOT EXISTS idx_entities_doc ON entities(document_id);
 """
 
 TRIGGERS = """
@@ -104,6 +115,19 @@ def _migrate(db):
     if "month" not in tcols:
         db.execute("ALTER TABLE times ADD COLUMN month INTEGER")
     db.execute("CREATE INDEX IF NOT EXISTS idx_times_month ON times(year, month)")
+    db.execute(
+        """CREATE TABLE IF NOT EXISTS entities (
+             id INTEGER PRIMARY KEY,
+             document_id INTEGER NOT NULL,
+             name TEXT NOT NULL,
+             label TEXT NOT NULL,
+             count INTEGER DEFAULT 1,
+             FOREIGN KEY(document_id) REFERENCES documents(id) ON DELETE CASCADE
+           )"""
+    )
+    db.execute("CREATE INDEX IF NOT EXISTS idx_entities_label ON entities(label)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_entities_name ON entities(name)")
+    db.execute("CREATE INDEX IF NOT EXISTS idx_entities_doc ON entities(document_id)")
     db.commit()
 
 
@@ -146,7 +170,7 @@ def insert_document(db, path, filename, mime, text, year, stats=None):
 
 
 def clear_document_annotations(db, doc_id):
-    for table in ("places", "times", "quantities", "concept_hits"):
+    for table in ("places", "times", "quantities", "concept_hits", "entities"):
         db.execute(f"DELETE FROM {table} WHERE document_id=?", (doc_id,))
 
 
