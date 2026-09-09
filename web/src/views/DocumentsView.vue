@@ -46,11 +46,11 @@
             </tr>
             <tr>
               <th><span class="explain" data-tip="Unique terms ÷ tokens in the extracted text. Higher means more varied vocabulary; lower means more repetition.">Type–token ratio</span></th>
-              <td colspan="3">{{ stats.ttr_avg != null ? stats.ttr_avg.toFixed(3) : '—' }}</td>
+              <td colspan="3">{{ stats.type_token_avg != null ? stats.type_token_avg.toFixed(3) : '—' }}</td>
             </tr>
             <tr>
-              <th><span class="explain" data-tip="TTR is type–token ratio: unique terms / tokens. Same number as the row above; shown here under the usual acronym.">TTR</span></th>
-              <td colspan="3">{{ stats.ttr_avg != null ? stats.ttr_avg.toFixed(3) : '—' }}</td>
+              <th><span class="explain" data-tip="Text-to-tag ratio: visible text characters ÷ markup tags in Tika XHTML. Higher means more text per tag (content-heavy); lower means denser markup.">TTR</span></th>
+              <td colspan="3">{{ stats.ttr_avg != null ? stats.ttr_avg.toFixed(2) : '—' }}</td>
             </tr>
             <tr>
               <th><span class="explain" data-tip="Word-like tokens ([A-Za-z][A-Za-z0-9']+) in extracted text.">Tokens</span></th>
@@ -59,7 +59,7 @@
               <td>{{ fmt(stats.word_count?.sum) }}</td>
             </tr>
             <tr>
-              <th><span class="explain" data-tip="Distinct tokens, case-folded. The numerator of TTR.">Unique terms</span></th>
+              <th><span class="explain" data-tip="Distinct tokens, case-folded. The numerator of type–token ratio.">Unique terms</span></th>
               <td>{{ fmt(stats.unique_terms?.max) }}</td>
               <td>{{ fmt(stats.unique_terms?.avg) }}</td>
               <td>{{ fmt(stats.unique_terms?.sum) }}</td>
@@ -77,7 +77,8 @@
           <th><span class="explain" data-tip="Bytes on disk.">Size</span></th>
           <th><span class="explain" data-tip="Extracted text bytes / file bytes.">Text %</span></th>
           <th><span class="explain" data-tip="Metadata bytes / file bytes.">Meta %</span></th>
-          <th><span class="explain" data-tip="TTR = type–token ratio = unique terms / tokens.">TTR</span></th>
+          <th><span class="explain" data-tip="Unique terms / tokens.">Type–token</span></th>
+          <th><span class="explain" data-tip="TTR = text-to-tag ratio: text characters / XHTML tags from Tika.">TTR</span></th>
           <th><span class="explain" data-tip="Language from Tika metadata, or English if the text looks like English.">Lang</span></th>
           <th><span class="explain" data-tip="Most common extracted year in the document, not necessarily publication year.">Year</span></th>
         </tr>
@@ -89,7 +90,8 @@
           <td>{{ bytes(d.file_size) }}</td>
           <td>{{ pct(d.text_yield) }}</td>
           <td>{{ pct(d.meta_yield) }}</td>
-          <td>{{ d.ttr != null ? d.ttr.toFixed(3) : '—' }}</td>
+          <td>{{ d.type_token != null ? d.type_token.toFixed(3) : '—' }}</td>
+          <td>{{ d.ttr != null ? d.ttr.toFixed(2) : '—' }}</td>
           <td>{{ d.language || '—' }}</td>
           <td>{{ d.year || '—' }}</td>
         </tr>
@@ -104,8 +106,9 @@
         <span class="explain" data-tip="Extracted text bytes / file bytes."><strong>{{ pct(detail.text_yield) }}</strong> text yield</span>
         <span class="explain" data-tip="Metadata bytes / file bytes."><strong>{{ pct(detail.meta_yield) }}</strong> metadata yield</span>
         <span class="explain" data-tip="Word-like tokens in extracted text."><strong>{{ fmt(detail.word_count) }}</strong> tokens</span>
-        <span class="explain" data-tip="Distinct tokens. Numerator of TTR."><strong>{{ fmt(detail.unique_terms) }}</strong> unique</span>
-        <span class="explain" data-tip="Type–token ratio: unique / tokens."><strong>{{ detail.ttr != null ? detail.ttr.toFixed(3) : '—' }}</strong> TTR</span>
+        <span class="explain" data-tip="Distinct tokens. Numerator of type–token ratio."><strong>{{ fmt(detail.unique_terms) }}</strong> unique</span>
+        <span class="explain" data-tip="Unique terms / tokens."><strong>{{ detail.type_token != null ? detail.type_token.toFixed(3) : '—' }}</strong> type–token</span>
+        <span class="explain" data-tip="Text-to-tag ratio: text characters / Tika XHTML tags."><strong>{{ detail.ttr != null ? detail.ttr.toFixed(2) : '—' }}</strong> TTR</span>
       </div>
       <div class="tabs">
         <button v-for="t in tabs" :key="t" :class="{ active: tab === t }" @click="tab = t">{{ t }}</button>
