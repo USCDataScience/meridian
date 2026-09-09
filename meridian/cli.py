@@ -1,7 +1,7 @@
 import argparse
 import sys
 from . import db as store
-from .index import index_paths
+from .index import index_paths, regeocode
 from .paths import DB_PATH
 from . import __version__
 
@@ -16,7 +16,7 @@ def main(argv=None):
 
     idx = sub.add_parser("index", help="Extract and store files")
     idx.add_argument("paths", nargs="+", help="Files or directories")
-    idx.add_argument("--no-geo", action="store_true", help="Skip Nominatim lookups")
+    idx.add_argument("--no-geo", action="store_true", help="Skip gazetteer lookups")
 
     srv = sub.add_parser("serve", help="API + Vue UI")
     srv.add_argument("--host", default="127.0.0.1")
@@ -24,6 +24,11 @@ def main(argv=None):
 
     rst = sub.add_parser("reset", help="Empty the catalog; corpus stays")
     rst.add_argument("--yes", action="store_true")
+
+    geo_p = sub.add_parser("geocode", help="Re-resolve places from stored text")
+    geo_p.add_argument("--no-geo", action="store_true", help="NER only; no gazetteer")
+
+    sub.add_parser("gazetteer", help="Download and build the local GeoNames gazetteer")
 
     args = p.parse_args(argv)
     if args.cmd == "index":
@@ -44,6 +49,11 @@ def main(argv=None):
                 return 1
         store.reset()
         print(f"reset {DB_PATH}")
+    elif args.cmd == "geocode":
+        regeocode(resolve_geo=not args.no_geo)
+    elif args.cmd == "gazetteer":
+        from . import geonames
+        geonames.build()
     return 0
 
 

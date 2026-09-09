@@ -210,7 +210,7 @@ def analyze(text):
     places = Counter()
     date_surfaces = []
     for ent in doc.ents:
-        if ent.label_ in ("GPE", "LOC", "FAC"):
+        if ent.label_ in ("GPE", "LOC"):
             name = " ".join(ent.text.split())
             if name.lower().startswith("the "):
                 name = name[4:]

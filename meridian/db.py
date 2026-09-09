@@ -119,7 +119,7 @@ def connect(path=None):
 
 
 def reset(path=None):
-    """Empty the catalog but keep the Nominatim cache."""
+    """Empty the catalog. The GeoNames gazetteer is not the catalog."""
     db = connect(path)
     db.execute("DELETE FROM documents")
     db.commit()
