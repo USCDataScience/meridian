@@ -54,7 +54,7 @@ def index_paths(paths, resolve_geo=True):
         rel = str(f)
         print(f"index [{i}/{total}] {rel}")
         try:
-            text, mime, meta = extract.tika_parse(f)
+            text, mime, meta, xhtml = extract.tika_parse(f)
         except Exception as e:
             print(f"  tika failed: {e}")
             continue
@@ -62,7 +62,7 @@ def index_paths(paths, resolve_geo=True):
         times = extract.times_from_text(text, meta, date_surfaces)
         years = [t["year"] for t in times]
         year = Counter(years).most_common(1)[0][0] if years else None
-        stats = extract.text_stats(text, f, meta)
+        stats = extract.text_stats(text, f, meta, xhtml)
         existing = store.document_id_for_path(conn, rel)
         if existing:
             store.clear_document_annotations(conn, existing)

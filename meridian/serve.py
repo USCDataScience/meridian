@@ -90,18 +90,23 @@ def stats(q: str | None = None, concept: str | None = None, place: str | None = 
             ids,
         )]
         for r in db.execute(
-            f"SELECT file_size, text_size, meta_size, ttr FROM documents WHERE id IN ({_in(ids)})",
+            f"""SELECT file_size, text_size, meta_size, ttr, tag_count,
+                       word_count, unique_terms
+                FROM documents WHERE id IN ({_in(ids)})""",
             ids,
         ):
             fs = r["file_size"] or 0
+            wc = r["word_count"] or 0
             yields.append({
                 "text_yield": (r["text_size"] / fs) if fs else None,
                 "meta_yield": (r["meta_size"] / fs) if fs else None,
                 "ttr": r["ttr"],
+                "type_token": (r["unique_terms"] / wc) if wc else None,
             })
     text_yields = [y["text_yield"] for y in yields if y["text_yield"] is not None]
     meta_yields = [y["meta_yield"] for y in yields if y["meta_yield"] is not None]
     ttrs = [y["ttr"] for y in yields if y["ttr"] is not None]
+    type_tokens = [y["type_token"] for y in yields if y["type_token"] is not None]
     return {
         "documents": n,
         "places": 0 if not ids else db.execute(
@@ -124,6 +129,7 @@ def stats(q: str | None = None, concept: str | None = None, place: str | None = 
         "text_yield_avg": sum(text_yields) / len(text_yields) if text_yields else None,
         "meta_yield_avg": sum(meta_yields) / len(meta_yields) if meta_yields else None,
         "ttr_avg": sum(ttrs) / len(ttrs) if ttrs else None,
+        "type_token_avg": sum(type_tokens) / len(type_tokens) if type_tokens else None,
         "mime": mime,
         "languages": langs,
     }
@@ -138,7 +144,7 @@ def documents(q: str | None = None, concept: str | None = None, place: str | Non
         return []
     rows = db.execute(
         f"""SELECT id, path, filename, mime, year, file_size, text_size, meta_size,
-                   language, word_count, unique_terms, ttr
+                   language, word_count, unique_terms, ttr, tag_count
             FROM documents WHERE id IN ({_in(ids)}) ORDER BY filename""",
         ids,
     ).fetchall()
@@ -148,6 +154,8 @@ def documents(q: str | None = None, concept: str | None = None, place: str | Non
         fs = d.get("file_size") or 0
         d["text_yield"] = (d["text_size"] / fs) if fs and d.get("text_size") is not None else None
         d["meta_yield"] = (d["meta_size"] / fs) if fs and d.get("meta_size") is not None else None
+        wc = d.get("word_count") or 0
+        d["type_token"] = (d["unique_terms"] / wc) if wc else None
         out.append(d)
     return out
 
@@ -166,6 +174,8 @@ def document(doc_id: int):
     fs = d.get("file_size") or 0
     d["text_yield"] = (d["text_size"] / fs) if fs and d.get("text_size") is not None else None
     d["meta_yield"] = (d["meta_size"] / fs) if fs and d.get("meta_size") is not None else None
+    wc = d.get("word_count") or 0
+    d["type_token"] = (d["unique_terms"] / wc) if wc else None
     d["places"] = [dict(r) for r in db.execute(
         "SELECT name, lat, lon, count FROM places WHERE document_id=? ORDER BY count DESC", (doc_id,))]
     d["times"] = [dict(r) for r in db.execute(
