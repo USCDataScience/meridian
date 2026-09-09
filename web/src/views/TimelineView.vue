@@ -14,7 +14,7 @@
     <p class="muted">Newest first · showing {{ visibleYearList.length }} of {{ allYearList.length }} years</p>
     <div ref="heatEl" class="chart"></div>
     <button v-if="visibleYearList.length < allYearList.length" class="more" @click="monthPage += 50">
-      Older years ({{ allYearList.length - visibleYearList.length }} left)
+      Load more ({{ allYearList.length - visibleYearList.length }} left)
     </button>
     <h3>Mentions by decade</h3>
     <div ref="decEl" class="chart"></div>

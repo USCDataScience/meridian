@@ -98,9 +98,8 @@
       </tbody>
     </table>
     <p v-if="documents.length" class="muted">Showing {{ visible.length }} of {{ documents.length }}</p>
-    <div ref="moreEl" class="sentinel"></div>
     <button v-if="visible.length < documents.length" class="more" @click="loadMore">
-      More files ({{ documents.length - visible.length }} left)
+      Load more ({{ documents.length - visible.length }} left)
     </button>
     <p v-if="!documents.length" class="muted">No documents. Run <code>meridian index ./demo</code>.</p>
 
@@ -148,7 +147,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { barChart, paint, pieChart } from '../charts.js'
 
 const PAGE = 25
@@ -163,7 +162,6 @@ const mimeEl = ref(null)
 const langEl = ref(null)
 const placeEl = ref(null)
 const yearEl = ref(null)
-const moreEl = ref(null)
 const shown = ref(PAGE)
 const tab = ref('Text')
 const tabs = ['Text', 'Metadata', 'Extractions']
@@ -174,15 +172,7 @@ function loadMore() {
   shown.value = Math.min(shown.value + PAGE, props.documents.length)
 }
 
-let observer
-function bindObserver() {
-  observer?.disconnect()
-  if (!moreEl.value) return
-  observer = new IntersectionObserver((entries) => {
-    if (entries.some(e => e.isIntersecting)) loadMore()
-  }, { rootMargin: '80px' })
-  observer.observe(moreEl.value)
-}
+
 
 function bytes(n) {
   if (n == null || Number.isNaN(n)) return '—'
@@ -217,11 +207,7 @@ function draw() {
   })
 }
 
-onMounted(() => {
-  draw()
-  bindObserver()
-})
-onUnmounted(() => observer?.disconnect())
+onMounted(draw)
 watch(() => [props.stats, props.detail, tab.value], draw, { deep: true })
 watch(() => props.documents, () => { shown.value = PAGE })
 </script>
@@ -260,7 +246,6 @@ watch(() => props.documents, () => { shown.value = PAGE })
   border: 1px solid #c9a227;
 }
 .nums th, .docs th, .kpis span { position: relative; }
-.sentinel { height: 1px; }
 .more {
   margin: 0.5rem 0 1rem; background: var(--sea); color: #fff; border: none;
   padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer;
