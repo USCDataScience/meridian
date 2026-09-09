@@ -204,21 +204,50 @@ def times_from_text(text, meta=None, date_surfaces=None):
     return uniq
 
 
+def _clean_ent(text):
+    name = " ".join((text or "").split())
+    if name.lower().startswith("the "):
+        name = name[4:]
+    name = name.strip(" ,;:.-")
+    if len(name) < 2 or len(name) > 80:
+        return None
+    if name.isdigit():
+        return None
+    return name
+
+
+SKIP_PERSON = {
+    "fig", "figure", "table", "eq", "equation", "appendix", "section", "chapter",
+    "ref", "refs", "et al", "al", "java", "python", "xml", "json", "html", "pdf",
+    "http", "https", "www", "doi", "isbn", "metadata", "dataset", "software",
+    "tika", "hadoop", "spark", "solr", "lucene", "groovy", "scala",
+}
+FIG = re.compile(r"^fig\.?\s*\d", re.I)
+
+
 def analyze(text):
-    """NER places/dates and keep a short text window for spaCy."""
+    """NER places, people, orgs, and date surfaces. Places are GPE/LOC only (no FAC)."""
     doc = nlp()((text or "")[:80000])
     places = Counter()
+    people = Counter()
+    orgs = Counter()
     date_surfaces = []
     for ent in doc.ents:
         if ent.label_ in ("GPE", "LOC"):
-            name = " ".join(ent.text.split())
-            if name.lower().startswith("the "):
-                name = name[4:]
-            if len(name) > 1:
+            name = _clean_ent(ent.text)
+            if name:
                 places[name] += 1
+        elif ent.label_ == "PERSON":
+            name = _clean_ent(ent.text)
+            if name and name.lower() not in SKIP_PERSON and not FIG.match(name):
+                people[name] += 1
+        elif ent.label_ == "ORG":
+            name = _clean_ent(ent.text)
+            if name:
+                orgs[name] += 1
         elif ent.label_ == "DATE":
             date_surfaces.append(ent.text)
-    return places, date_surfaces
+    return {"places": places, "people": people, "orgs": orgs, "dates": date_surfaces}
 
 
 def quantities(text):

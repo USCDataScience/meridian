@@ -83,10 +83,10 @@ async function run() {
     mq: mq.value,
     value_min: valueMin.value,
     value_max: valueMax.value,
-    unit: unit.value || props.filters.unit
+    unit: unit.value || undefined
   }
   hits.value = await get('/api/measurements/hits', extra)
-  if (unit.value) hist.value = await get('/api/measurements/histogram', { ...props.filters, unit: unit.value })
+  if (unit.value) hist.value = await get('/api/measurements/histogram', { ...props.filters, hist_unit: unit.value })
   else hist.value = []
   nextTick(draw)
 }

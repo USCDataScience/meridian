@@ -60,8 +60,9 @@ def index_paths(paths, resolve_geo=True):
         except Exception as e:
             print(f"  tika failed: {e}")
             continue
-        places, date_surfaces = extract.analyze(text)
-        times = extract.times_from_text(text, meta, date_surfaces)
+        ner = extract.analyze(text)
+        places = ner["places"]
+        times = extract.times_from_text(text, meta, ner["dates"])
         years = [t["year"] for t in times]
         year = Counter(years).most_common(1)[0][0] if years else None
         stats = extract.text_stats(text, f, meta, xhtml)
@@ -71,6 +72,7 @@ def index_paths(paths, resolve_geo=True):
             conn.execute("DELETE FROM documents WHERE id=?", (existing,))
         doc_id = store.insert_document(conn, rel, f.name, mime, text, year, stats)
         placed = _store_places(conn, doc_id, places, resolve_geo)
+        n_ent = _store_entities(conn, doc_id, ner["people"], ner["orgs"])
         for t in times:
             conn.execute(
                 "INSERT INTO times(document_id, year, month, surface) VALUES (?,?,?,?)",
@@ -90,7 +92,7 @@ def index_paths(paths, resolve_geo=True):
         n += 1
         print(
             f"  {mime or 'unknown'}  year={year}  places={placed}/{len(places)}  "
-            f"times={len(times)}  yield={stats.get('text_yield')}"
+            f"who={n_ent}  times={len(times)}  yield={stats.get('text_yield')}"
         )
     print(f"indexed {n} file(s) at {datetime.now():%H:%M:%S}")
     return n
@@ -113,8 +115,25 @@ def _store_places(conn, doc_id, places, resolve_geo):
     return len(places)
 
 
+def _store_entities(conn, doc_id, people, orgs):
+    n = 0
+    for name, count in (people or {}).items():
+        conn.execute(
+            "INSERT INTO entities(document_id, name, label, count) VALUES (?,?,?,?)",
+            (doc_id, name, "PERSON", count),
+        )
+        n += 1
+    for name, count in (orgs or {}).items():
+        conn.execute(
+            "INSERT INTO entities(document_id, name, label, count) VALUES (?,?,?,?)",
+            (doc_id, name, "ORG", count),
+        )
+        n += 1
+    return n
+
+
 def regeocode(resolve_geo=True):
-    """Re-NER GPE/LOC from stored text and resolve against the local gazetteer."""
+    """Re-NER places/people/orgs from stored text; resolve places against the gazetteer."""
     conn = store.connect()
     rows = conn.execute("SELECT id, filename, text FROM documents").fetchall()
     if not rows:
@@ -126,16 +145,23 @@ def regeocode(resolve_geo=True):
     n = 0
     hits = 0
     mentioned = 0
+    who = 0
     for i, row in enumerate(rows, 1):
-        places, _ = extract.analyze(row["text"] or "")
+        ner = extract.analyze(row["text"] or "")
+        places = ner["places"]
         mentioned += len(places)
         conn.execute("DELETE FROM places WHERE document_id=?", (row["id"],))
+        conn.execute("DELETE FROM entities WHERE document_id=?", (row["id"],))
         placed = _store_places(conn, row["id"], places, resolve_geo)
+        who += _store_entities(conn, row["id"], ner["people"], ner["orgs"])
         hits += placed
         conn.commit()
         n += 1
-        print(f"geocode [{i}/{total}] {row['filename']}  {placed}/{len(places)}")
-    print(f"geocoded {n} document(s), {hits}/{mentioned} places resolved")
+        print(
+            f"geocode [{i}/{total}] {row['filename']}  "
+            f"{placed}/{len(places)} places  people={len(ner['people'])} orgs={len(ner['orgs'])}"
+        )
+    print(f"geocoded {n} document(s), {hits}/{mentioned} places resolved, {who} person/org names")
     return n
 
 
