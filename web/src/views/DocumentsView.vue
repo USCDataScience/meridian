@@ -84,7 +84,7 @@
         </tr>
       </thead>
       <tbody>
-        <tr v-for="d in documents" :key="d.id" class="click" @click="$emit('open', d.id)">
+        <tr v-for="d in visible" :key="d.id" class="click" @click="$emit('open', d.id)">
           <td>{{ d.filename }}</td>
           <td class="muted">{{ d.mime }}</td>
           <td>{{ bytes(d.file_size) }}</td>
@@ -97,6 +97,11 @@
         </tr>
       </tbody>
     </table>
+    <p v-if="documents.length" class="muted">Showing {{ visible.length }} of {{ documents.length }}</p>
+    <div ref="moreEl" class="sentinel"></div>
+    <button v-if="visible.length < documents.length" class="more" @click="loadMore">
+      More files ({{ documents.length - visible.length }} left)
+    </button>
     <p v-if="!documents.length" class="muted">No documents. Run <code>meridian index ./demo</code>.</p>
 
     <article v-if="detail" class="detail">
@@ -143,9 +148,10 @@
 </template>
 
 <script setup>
-import { onMounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { barChart, paint, pieChart } from '../charts.js'
 
+const PAGE = 25
 const props = defineProps({
   documents: { type: Array, default: () => [] },
   stats: { type: Object, default: () => ({}) },
@@ -157,8 +163,26 @@ const mimeEl = ref(null)
 const langEl = ref(null)
 const placeEl = ref(null)
 const yearEl = ref(null)
+const moreEl = ref(null)
+const shown = ref(PAGE)
 const tab = ref('Text')
 const tabs = ['Text', 'Metadata', 'Extractions']
+const visible = computed(() => props.documents.slice(0, shown.value))
+
+function loadMore() {
+  if (shown.value >= props.documents.length) return
+  shown.value = Math.min(shown.value + PAGE, props.documents.length)
+}
+
+let observer
+function bindObserver() {
+  observer?.disconnect()
+  if (!moreEl.value) return
+  observer = new IntersectionObserver((entries) => {
+    if (entries.some(e => e.isIntersecting)) loadMore()
+  }, { rootMargin: '80px' })
+  observer.observe(moreEl.value)
+}
 
 function bytes(n) {
   if (n == null || Number.isNaN(n)) return '—'
@@ -193,8 +217,13 @@ function draw() {
   })
 }
 
-onMounted(draw)
+onMounted(() => {
+  draw()
+  bindObserver()
+})
+onUnmounted(() => observer?.disconnect())
 watch(() => [props.stats, props.detail, tab.value], draw, { deep: true })
+watch(() => props.documents, () => { shown.value = PAGE })
 </script>
 
 <style scoped>
@@ -231,6 +260,11 @@ watch(() => [props.stats, props.detail, tab.value], draw, { deep: true })
   border: 1px solid #c9a227;
 }
 .nums th, .docs th, .kpis span { position: relative; }
+.sentinel { height: 1px; }
+.more {
+  margin: 0.5rem 0 1rem; background: var(--sea); color: #fff; border: none;
+  padding: 0.35rem 0.8rem; border-radius: 4px; cursor: pointer;
+}
 .detail { margin-top: 1.2rem; background: var(--card); border: 1px solid var(--line); padding: 1rem; border-radius: 8px; }
 .detail pre { white-space: pre-wrap; font-size: 0.85rem; max-height: 28rem; overflow: auto; }
 .kpis { display: flex; flex-wrap: wrap; gap: 1rem; margin: 0.6rem 0; color: var(--muted); }
